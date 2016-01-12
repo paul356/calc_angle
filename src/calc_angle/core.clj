@@ -1,7 +1,7 @@
 (ns calc-angle.core
- (:require [clojure.string :as string]
-           [clojure.core.reducers :as r])
- (:gen-class))
+  (:require [clojure.string :as string]
+            [clojure.core.reducers :as r])
+  (:gen-class))
 
 (declare radian-to-degree)
 
@@ -38,50 +38,53 @@
   (int (+ ang 0.5)))
 
 (defn get-first-angle [ang] 
-  (int (+ (map-angle first-angle-map ang) 0.5)))
+  (map-angle first-angle-map ang))
 
 (defn get-second-angle [ang] 
-  (int (+ (map-angle second-angle-map ang) 0.5)))
+  (map-angle second-angle-map ang))
 
 (defn get-base-angle [ang]
-  (int (+ (map-angle base-angle-map ang) 0.5)))
+  (map-angle base-angle-map ang))
 
 (defn normalize-angle [ang]
- (loop [a ang]
-  (if (and (not (neg? a)) (< a (* 2 PI)))
-   a
-   (recur (+ a (if (neg? a) (* 2 PI) (* -2 PI)))))))
+  (loop [a ang]
+    (if (and (not (neg? a)) (< a (* 2 PI)))
+      a
+      (recur (+ a (if (neg? a) (* 2 PI) (* -2 PI)))))))
 
 (defn calc-cos-beta [r z]
- (let [z2 (* z z)
-       r2 (* r r)
-       a (/ 
-           (+ (- (* first-arm first-arm) (* second-arm second-arm)) z2 r2) 
-           (* 2 first-arm))
-       sqrt (Math/sqrt 
-           (- 
-            (+ z2 r2) 
-            (* a a)))]
-  (/ (- (* a r) (* z sqrt)) (+ z2 r2))))
+  (let [z2 (* z z)
+        r2 (* r r)
+        a (/ 
+            (+ (- (* first-arm first-arm) (* second-arm second-arm)) z2 r2) 
+            (* 2 first-arm))
+        sqrt (Math/sqrt 
+               (- 
+                 (+ z2 r2) 
+                 (* a a)))]
+    (/ (- (* a r) (* z sqrt)) (+ z2 r2))))
 
 (defn radian-to-degree [ang]
- (/ (* 180. ang) PI))
+  (/ (* 180. ang) PI))
+
+(defn degree-to-radian [ang]
+  (/ (* PI ang) 180.))
 
 (defn calc-alpha-beta [r z]
- (let [cos-beta (calc-cos-beta r z)
-       sin-beta (Math/sqrt (- 1 (* cos-beta cos-beta)))
-       cos-gamma (/ (- (* first-arm sin-beta) z) second-arm)]
-  (list (- (/ PI 2.) (Math/acos cos-gamma)) (Math/acos cos-beta))))
+  (let [cos-beta (calc-cos-beta r z)
+        sin-beta (Math/sqrt (- 1 (* cos-beta cos-beta)))
+        cos-gamma (/ (- (* first-arm sin-beta) z) second-arm)]
+    (list (- (/ PI 2.) (Math/acos cos-gamma)) (Math/acos cos-beta))))
 
 (defn display-alpha-beta [alpha beta]
- (println (str "first-arm*cos(beta)=" (* first-arm (Math/cos beta))))
- (println (str "second-arm*cos(alpha)=" (* second-arm (Math/cos alpha))))
- (println (str "first-arm*sin(beta)=" (* first-arm (Math/sin beta))))
- (println (str "second-arm*sin(alpha)=" (* second-arm (Math/sin alpha)))))
+  (println (str "first-arm*cos(beta)=" (* first-arm (Math/cos beta))))
+  (println (str "second-arm*cos(alpha)=" (* second-arm (Math/cos alpha))))
+  (println (str "first-arm*sin(beta)=" (* first-arm (Math/sin beta))))
+  (println (str "second-arm*sin(alpha)=" (* second-arm (Math/sin alpha)))))
 
 (defn calc-r-theta [x y]
- (let [r (Math/sqrt (+ (* x x) (* y y)))]
-  (list r (radian-to-degree (Math/asin (/ (- x) r))))))
+  (let [r (Math/sqrt (+ (* x x) (* y y)))]
+    (list r (radian-to-degree (Math/asin (/ (- x) r))))))
 
 ;;; Code used to calculate the map between servo angle and arm angle
 ;(def exper-data {40 {60 [13.7 11.1]   65 [13.95 9.95]  70 [13.84 8.35]  75 [13.75 6.7]   80 [13.65 5.25]  85 [13.55 4.1]} 
@@ -130,12 +133,12 @@
                   (- (second pt2) (second pt1))))))
 
 (defn mix-pts [pt1 ratio1 pt2 ratio2]
- (list (+ 
-         (* ratio1 (first pt1))
-         (* ratio2 (first pt2)))
-       (+
-         (* ratio1 (second pt1))
-         (* ratio2 (second pt2)))))
+  (list (+ 
+          (* ratio1 (first pt1))
+          (* ratio2 (first pt2)))
+        (+
+          (* ratio1 (second pt1))
+          (* ratio2 (second pt2)))))
 
 (defn preprocess-stroke [stroke]
   (defn append-point [stroke-arr new-tail]
@@ -176,6 +179,14 @@
   (doseq [stroke strokes]
     (println (str "   " (doall stroke)))))
 
+(defn calc-xyz [alpha beta theta]
+  (let [alpha-rad (degree-to-radian alpha)
+        beta-rad  (degree-to-radian beta)
+        theta-rad (degree-to-radian theta)
+        r (+ (* (Math/cos beta-rad) first-arm) (* (Math/cos alpha-rad) second-arm))
+        y (+ (* (Math/sin beta-rad) first-arm) (* (Math/sin (- alpha-rad)) second-arm))]
+    (list (* r (Math/cos theta-rad)) y (* r (Math/sin (- theta-rad))))))
+
 (defn -main
   "main function"
   [& args]
@@ -190,12 +201,16 @@
           strokes-z (reduce concat strokes-gaps)
           r-theta-list (map #(apply calc-r-theta %) (map (fn [x] (take 2 x)) strokes-z))
           alpha-beta-radian-list (map #(calc-alpha-beta (first %1) %2) r-theta-list (map (fn [x] (last x)) strokes-z))
-          alpha-beta-degree-list (map (fn [[alpha beta]] (list (get-second-angle (radian-to-degree alpha)) (get-first-angle (radian-to-degree beta)))) alpha-beta-radian-list)]
+          alpha-beta-degree-list (map (fn [[alpha beta]] (list (get-second-angle (radian-to-degree alpha)) (get-first-angle (radian-to-degree beta)))) alpha-beta-radian-list)
+          reverse-xyz (map (fn [[alpha beta] [_ theta]] (calc-xyz alpha beta theta)) alpha-beta-degree-list r-theta-list)]
       (dump-strokes strokes "strokes")
       (dump-strokes gaps "gaps")
       (dump-strokes strokes1 "strokes after preprocess")
       (dump-strokes strokes-gaps "strokes gaps interleaved")
       (dump-strokes strokes-z "strokes-z")
+      (dump-strokes alpha-beta-degree-list "alpha beta degree list")
+      (dump-strokes r-theta-list "r theta list")
+      (dump-strokes reverse-xyz "reverse-xyz")
       (with-open [fin (clojure.java.io/reader "resources/machine_arm.ino")
                   fout (clojure.java.io/writer "target/machine_arm.ino")]
         (doseq [line (line-seq fin)]
@@ -204,12 +219,12 @@
           (when (= line "// Insert Arrays Here")
             (.write fout 
                     (with-out-str 
-                      (println (str "var betas = [" (string/join "," (map #(str (first %)) alpha-beta-degree-list)) "];"))
-                      (println (str "var alphas = [" (string/join "," (map #(str (second %)) alpha-beta-degree-list)) "];"))
+                      (println (str "var alphas = [" (string/join "," (map #(str (first %)) alpha-beta-degree-list)) "];"))
+                      (println (str "var betas = [" (string/join "," (map #(str (second %)) alpha-beta-degree-list)) "];"))
                       (println (str "var delta_thetas = [" (string/join "," (map #(str (get-base-angle (second %))) r-theta-list)) "];"))))
-                      ;(println (str "const int betas[] PROGMEM = {" (string/join "," (map #(str (first %)) alpha-beta-degree-list)) "};"))
-                      ;(println (str "const int alphas[] PROGMEM = {" (string/join "," (map #(str (second %)) alpha-beta-degree-list)) "};"))
-                      ;(println (str "const int delta_thetas[] PROGMEM = {" (string/join "," (map #(str (get-base-angle (second %))) r-theta-list)) "};"))))
+            ;(println (str "const int alphas[] PROGMEM = {" (string/join "," (map #(str (first %)) alpha-beta-degree-list)) "};"))
+            ;(println (str "const int betas[] PROGMEM = {" (string/join "," (map #(str (second %)) alpha-beta-degree-list)) "};"))
+            ;(println (str "const int delta_thetas[] PROGMEM = {" (string/join "," (map #(str (get-base-angle (second %))) r-theta-list)) "};"))))
             (.write fout "\n")))))))
 
 ;(defn -main1
