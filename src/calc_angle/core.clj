@@ -19,23 +19,31 @@
 
 (def base-angle-map {-20 -21.848553133651606 -10 -10.771402340447487 0 1.7763568394002505E-15 10 9.2752026167234 20 20.626695019341334 30 30.827271334625493})
 
-;(defn map-angle [angle-map ang]
-;  (let [ks     (keys angle-map)
-;        kmax   (apply max ks)
-;        kmin   (apply min ks)]
-;    (cond
-;      (> ang (angle-map kmax)) (+ ang (- kmax (angle-map kmax)))
-;      (< ang (angle-map kmin)) (+ ang (- kmin (angle-map kmin)))
-;      :else (let [[kn vn] (reduce (fn [[kmin min-dist] [k v]] 
-;                                    (if (< (Math/abs (- ang v)) min-dist) 
-;                                      [k v]
-;                                      [kmin min-dist]))
-;                                  [0 360]
-;                                  angle-map)]
-;              (+ ang (- kn vn))))))
+(def simulate nil)
+
+(defn to-int [val]
+  (int (+ 0.5 val)))
+
+(defn map-angle-real [angle-map ang]
+  (let [ks     (keys angle-map)
+        kmax   (apply max ks)
+        kmin   (apply min ks)]
+    (cond
+      (> ang (angle-map kmax)) (to-int (+ ang (- kmax (angle-map kmax))))
+      (< ang (angle-map kmin)) (to-int (+ ang (- kmin (angle-map kmin))))
+      :else (let [[kn vn] (reduce (fn [[kmin min-dist] [k v]] 
+                                    (if (< (Math/abs (- ang v)) min-dist) 
+                                      [k v]
+                                      [kmin min-dist]))
+                                  [0 360]
+                                  angle-map)]
+              (to-int (+ ang (- kn vn)))))))
+
+(defn map-angle-virt [angle-map ang]
+  (to-int ang))
 
 (defn map-angle [angle-map ang]
-  (int (+ ang 0.5)))
+  (if simulate (map-angle-virt angle-map ang) (map-angle-real angle-map ang)))
 
 (defn get-first-angle [ang] 
   (map-angle first-angle-map ang))
@@ -43,8 +51,10 @@
 (defn get-second-angle [ang] 
   (map-angle second-angle-map ang))
 
+; If we turn counter-clock-wise, the relative angle is positive in Cartesian system.
+; But for the machine arm servo the angle is clock-wise, so we need to set it negative.
 (defn get-base-angle [ang]
-  (map-angle base-angle-map ang))
+  (map-angle base-angle-map (- ang)))
 
 (defn normalize-angle [ang]
   (loop [a ang]
@@ -197,7 +207,7 @@
           gaps (fill-stroke-gap strokes)
           strokes1 (map preprocess-stroke strokes)
           strokes-gaps (interleave (map (fn [x] (process-stroke x scale 0.0)) strokes1) 
-                                   (map (fn [x] (process-stroke x scale 6.0)) gaps))
+                                   (map (fn [x] (process-stroke x scale 2.0)) gaps))
           strokes-z (reduce concat strokes-gaps)
           r-theta-list (map #(apply calc-r-theta %) (map (fn [x] (take 2 x)) strokes-z))
           alpha-beta-radian-list (map #(calc-alpha-beta (first %1) %2) r-theta-list (map (fn [x] (last x)) strokes-z))
@@ -219,36 +229,39 @@
           (when (= line "// Insert Arrays Here")
             (.write fout 
                     (with-out-str 
-                      (println (str "var alphas = [" (string/join "," (map #(str (first %)) alpha-beta-degree-list)) "];"))
-                      (println (str "var betas = [" (string/join "," (map #(str (second %)) alpha-beta-degree-list)) "];"))
-                      (println (str "var delta_thetas = [" (string/join "," (map #(str (get-base-angle (second %))) r-theta-list)) "];"))))
-            ;(println (str "const int alphas[] PROGMEM = {" (string/join "," (map #(str (first %)) alpha-beta-degree-list)) "};"))
-            ;(println (str "const int betas[] PROGMEM = {" (string/join "," (map #(str (second %)) alpha-beta-degree-list)) "};"))
-            ;(println (str "const int delta_thetas[] PROGMEM = {" (string/join "," (map #(str (get-base-angle (second %))) r-theta-list)) "};"))))
+                      (if simulate
+                        (do
+                          (println (str "var alphas = [" (string/join "," (map #(str (first %)) alpha-beta-degree-list)) "];"))
+                          (println (str "var betas = [" (string/join "," (map #(str (second %)) alpha-beta-degree-list)) "];"))
+                          (println (str "var delta_thetas = [" (string/join "," (map #(str (get-base-angle (second %))) r-theta-list)) "];")))
+                        (do 
+                          (println (str "const int16_t alphas[] PROGMEM = {" (string/join "," (map #(str (first %)) alpha-beta-degree-list)) "};"))
+                          (println (str "const int16_t betas[] PROGMEM = {" (string/join "," (map #(str (second %)) alpha-beta-degree-list)) "};"))
+                          (println (str "const int16_t delta_thetas[] PROGMEM = {" (string/join "," (map #(str (get-base-angle (second %))) r-theta-list)) "};"))))))
             (.write fout "\n")))))))
 
-;(defn -main1
-;  "main function"
-;  [& args]
-;  (let [x-list (range -7 7 0.5)
-;        y-list (range 10 24 0.5)
-;        upper-arm (map #(list %1 %2) x-list (repeat 24))
-;        right-arm (map #(list %1 %2) (repeat 7) (reverse y-list))
-;        lower-arm (map #(list %1 %2) (reverse x-list) (repeat 10))
-;        left-arm (map #(list %1 %2) (repeat -7) y-list)
-;        square (concat upper-arm right-arm lower-arm left-arm)
-;        r-theta-list (map #(apply calc-r-theta %) square)
-;        alpha-beta-radian-list (map #(calc-alpha-beta (first %) 0) r-theta-list)
-;        alpha-beta-degree-list (map (fn [[alpha beta]] (list (get-second-angle (radian-to-degree alpha)) (get-first-angle (radian-to-degree beta)))) alpha-beta-radian-list)]
-;    (with-open [fin (clojure.java.io/reader "resources/machine_arm.ino")
-;                fout (clojure.java.io/writer "target/machine_arm.ino")]
-;      (doseq [line (line-seq fin)]
-;        (.write fout line)
-;        (.write fout "\n")
-;        (when (= line "// Insert Arrays Here")
-;          (.write fout 
-;                  (with-out-str 
-;                    (println (str "const int betas[] PROGMEM = {" (string/join "," (map #(str (first %)) alpha-beta-degree-list)) "};"))
-;                    (println (str "const int alphas[] PROGMEM = {" (string/join "," (map #(str (second %)) alpha-beta-degree-list)) "};"))
-;                    (println (str "const int delta_thetas[] PROGMEM = {" (string/join "," (map #(str (get-base-angle (second %))) r-theta-list)) "};"))))
-;          (.write fout "\n"))))))
+(defn -main1
+  "main function"
+  [& args]
+  (let [x-list (range -7 7 0.5)
+        y-list (range 10 24 0.5)
+        upper-arm (map #(list %1 %2) x-list (repeat 24))
+        right-arm (map #(list %1 %2) (repeat 7) (reverse y-list))
+        lower-arm (map #(list %1 %2) (reverse x-list) (repeat 10))
+        left-arm (map #(list %1 %2) (repeat -7) y-list)
+        square (concat upper-arm right-arm lower-arm left-arm)
+        r-theta-list (map #(apply calc-r-theta %) square)
+        alpha-beta-radian-list (map #(calc-alpha-beta (first %) 0) r-theta-list)
+        alpha-beta-degree-list (map (fn [[alpha beta]] (list (get-second-angle (radian-to-degree alpha)) (get-first-angle (radian-to-degree beta)))) alpha-beta-radian-list)]
+    (with-open [fin (clojure.java.io/reader "resources/machine_arm.ino")
+                fout (clojure.java.io/writer "target/machine_arm.ino")]
+      (doseq [line (line-seq fin)]
+        (.write fout line)
+        (.write fout "\n")
+        (when (= line "// Insert Arrays Here")
+          (.write fout 
+                  (with-out-str 
+                    (println (str "const int16_t alphas[] PROGMEM = {" (string/join ", " (map #(str (first %)) alpha-beta-degree-list)) "};"))
+                    (println (str "const int16_t betas[] PROGMEM = {" (string/join ", " (map #(str (second %)) alpha-beta-degree-list)) "};"))
+                    (println (str "const int16_t delta_thetas[] PROGMEM = {" (string/join ", " (map #(str (get-base-angle (second %))) r-theta-list)) "};"))))
+          (.write fout "\n"))))))

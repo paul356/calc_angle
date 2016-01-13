@@ -51,9 +51,9 @@ void loop()
     init_theta = myservoA.read();
 
     for (int i=0; i<NSTEP; i++) {
-      myservoB.write(map(i, 0, NSTEP, init_beta, betas[0]));
-      myservoC.write(map(i, 0, NSTEP, init_beta, alphas[0]));
-      myservoA.write(map(i, 0, NSTEP, init_theta, THETA_START + delta_thetas[0]));
+      myservoB.write(map(i, 0, NSTEP, init_beta, (int16_t)pgm_read_word_near(betas)));
+      myservoC.write(map(i, 0, NSTEP, init_alpha, (int16_t)pgm_read_word_near(alphas)));
+      myservoA.write(map(i, 0, NSTEP, init_theta, THETA_START + (int16_t)pgm_read_word_near(delta_thetas)));
     }
 
     inited = 1;
@@ -61,16 +61,16 @@ void loop()
 
   for (int j=0; j<len-1; j++) {
     for (int i=0; i<NSTEP; i++) {
-      myservoB.write(map(i, 0, NSTEP, betas[j], betas[j+1]));
-      myservoC.write(map(i, 0, NSTEP, alphas[j], alphas[j+1]));
-      myservoA.write(map(i, 0, NSTEP, THETA_START + delta_thetas[j], THETA_START + delta_thetas[j+1]));
+      myservoB.write(map(i, 0, NSTEP, (int16_t)pgm_read_word_near(betas+j), (int16_t)pgm_read_word_near(betas+j+1)));
+      myservoC.write(map(i, 0, NSTEP, (int16_t)pgm_read_word_near(alphas+j), (int16_t)pgm_read_word_near(alphas+j+1)));
+      myservoA.write(map(i, 0, NSTEP, THETA_START + (int16_t)pgm_read_word_near(delta_thetas+j), THETA_START + (int16_t)pgm_read_word_near(delta_thetas+j+1)));
     }
   }
 
   for (int i=0; i<NSTEP; i++) {
-    myservoB.write(map(i, 0, NSTEP, betas[len-1], betas[0]));
-    myservoC.write(map(i, 0, NSTEP, alphas[len-1], alphas[0]));
-    myservoA.write(map(i, 0, NSTEP, THETA_START + delta_thetas[len-1], THETA_START + delta_thetas[0]));
+    myservoB.write(map(i, 0, NSTEP, (int16_t)pgm_read_word_near(betas+len-1), (int16_t)pgm_read_word_near(betas)));
+    myservoC.write(map(i, 0, NSTEP, (int16_t)pgm_read_word_near(alphas+len-1), (int16_t)pgm_read_word_near(alphas)));
+    myservoA.write(map(i, 0, NSTEP, THETA_START + (int16_t)pgm_read_word_near(delta_thetas+len-1), THETA_START + (int16_t)pgm_read_word_near(delta_thetas)));
   }
 }
 
