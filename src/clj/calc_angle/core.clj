@@ -51,10 +51,8 @@
 (defn get-second-angle [ang] 
   (map-angle second-angle-map ang))
 
-; If we turn counter-clock-wise, the relative angle is positive in Cartesian system.
-; But for the machine arm servo the angle is clock-wise, so we need to set it negative.
 (defn get-base-angle [ang]
-  (map-angle base-angle-map (- ang)))
+  (map-angle base-angle-map ang))
 
 (defn normalize-angle [ang]
   (loop [a ang]
