@@ -1,6 +1,14 @@
 (ns calc-angle.core
   (:require [clojure.string :as string]
-            [clojure.core.reducers :as r])
+            [clojure.core.reducers :as r]
+            [ring.middleware.defaults :refer [wrap-defaults site-defaults]]
+            [ring.middleware.params :refer [wrap-params]]
+            [ring.util.response :refer [redirect content-type response]]
+            [compojure.core :refer [GET defroutes]]
+            [compojure.handler :refer [site]]
+            [compojure.route :refer [resources not-found]]
+            [clojure.java.io :as io])
+  (:import  [jssc SerialPort SerialPortList])
   (:gen-class))
 
 (declare radian-to-degree)
@@ -195,7 +203,7 @@
         y (+ (* (Math/sin beta-rad) first-arm) (* (Math/sin (- alpha-rad)) second-arm))]
     (list (* r (Math/cos theta-rad)) y (* r (Math/sin (- theta-rad))))))
 
-(defn -main
+(defn -main2
   "main function"
   [& args]
   (with-open [fin (clojure.java.io/reader "resources/huan_strokes.txt")]
@@ -263,3 +271,41 @@
                     (println (str "const int16_t betas[] PROGMEM = {" (string/join ", " (map #(str (second %)) alpha-beta-degree-list)) "};"))
                     (println (str "const int16_t delta_thetas[] PROGMEM = {" (string/join ", " (map #(str (get-base-angle (second %))) r-theta-list)) "};"))))
           (.write fout "\n"))))))
+
+(def ^{:dynamic true} *serial-conn*)
+
+;(defn set-port [idx val]
+; (.writeBytes serial-conn (byte-array [(byte \s) (byte idx) (byte val)]))
+; (aget (.readBytes serial-conn 1) 0))
+;
+;(defn query-port [idx] 
+; (.writeBytes serial-conn (byte-array [(byte \g) (byte idx)]))
+; (aget (.readBytes serial-conn 1) 0))
+
+(defroutes app
+           (GET "/" [] (redirect "index.html"))
+           (GET "/set-angle" [req] (if (:query-params req)
+                                     (set-angle req)
+                                     "/set-angle?a=<base>&b=<large>&c=<small>"))
+           (resources "/")
+           (not-found "<h1>not found</h1>"))
+
+(def entry (site app))
+
+(defn init
+  "one time initialization work"
+  []
+  (let [ports (. SerialPortList getPortNames)
+        myport "/dev/tty.usbmodem1411"]
+    (if (and (pos? (alength ports)) (contains? (set ports) myport))
+      (set! *serial-conn* 
+            (doto (SerialPort. myport)
+              (.openPort)
+              (.setParams 9600 8 1 0)
+              ((fn [_] (Thread/sleep 1000)))))
+      (println "There is no serial connection!"))))
+
+(defn destroy 
+  "release acquired resources before service stops"
+  []
+  (.closePort *serial-conn*))
