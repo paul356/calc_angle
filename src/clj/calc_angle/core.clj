@@ -3,7 +3,7 @@
             [clojure.core.reducers :as r]
             [ring.middleware.defaults :refer [wrap-defaults site-defaults]]
             [ring.middleware.params :refer [wrap-params]]
-            [ring.util.response :refer [redirect content-type response]]
+            [ring.util.response :refer [redirect]]
             [compojure.core :refer [GET defroutes]]
             [compojure.handler :refer [site]]
             [compojure.route :refer [resources not-found]]
@@ -13,7 +13,7 @@
 
 (declare radian-to-degree)
 
-(def PI 3.1415926)
+(def PI Math/PI)
 
 (def base-high 10.3)
 
@@ -21,46 +21,8 @@
 
 (def second-arm 15.2)
 
-(def first-angle-map {40 14.22404995529685, 45 20.043782041086256, 50 25.709566633950928, 55 31.292333102431485, 60 37.64978345241232, 65 43.95137401124416})
-
-(def second-angle-map {60 9.390239675001839, 65 14.672252295919492, 70 20.917146108295576, 75 26.983126309334125, 80 32.827069109280586, 85 38.730492145419724})
-
-(def base-angle-map {-20 -21.848553133651606 -10 -10.771402340447487 0 1.7763568394002505E-15 10 9.2752026167234 20 20.626695019341334 30 30.827271334625493})
-
-(def simulate nil)
-
 (defn to-int [val]
   (int (+ 0.5 val)))
-
-(defn map-angle-real [angle-map ang]
-  (let [ks     (keys angle-map)
-        kmax   (apply max ks)
-        kmin   (apply min ks)]
-    (cond
-      (> ang (angle-map kmax)) (to-int (+ ang (- kmax (angle-map kmax))))
-      (< ang (angle-map kmin)) (to-int (+ ang (- kmin (angle-map kmin))))
-      :else (let [[kn vn] (reduce (fn [[kmin min-dist] [k v]] 
-                                    (if (< (Math/abs (- ang v)) min-dist) 
-                                      [k v]
-                                      [kmin min-dist]))
-                                  [0 360]
-                                  angle-map)]
-              (to-int (+ ang (- kn vn)))))))
-
-(defn map-angle-virt [angle-map ang]
-  (to-int ang))
-
-(defn map-angle [angle-map ang]
-  (if simulate (map-angle-virt angle-map ang) (map-angle-real angle-map ang)))
-
-(defn get-first-angle [ang] 
-  (map-angle first-angle-map ang))
-
-(defn get-second-angle [ang] 
-  (map-angle second-angle-map ang))
-
-(defn get-base-angle [ang]
-  (map-angle base-angle-map ang))
 
 (defn normalize-angle [ang]
   (loop [a ang]
@@ -86,6 +48,10 @@
 (defn degree-to-radian [ang]
   (/ (* PI ang) 180.))
 
+;;
+;; beta is the angle of first-arm relative to x positive
+;; alpha is the angle of x positive relative to second-arm
+;;
 (defn calc-alpha-beta [r z]
   (let [cos-beta (calc-cos-beta r z)
         sin-beta (Math/sqrt (- 1 (* cos-beta cos-beta)))
@@ -98,47 +64,13 @@
   (println (str "first-arm*sin(beta)=" (* first-arm (Math/sin beta))))
   (println (str "second-arm*sin(alpha)=" (* second-arm (Math/sin alpha)))))
 
+;;
+;; r is the distance to origin in the x-y plane
+;; theta is the angle of the projection in x-y plane relative to y positive
+;;
 (defn calc-r-theta [x y]
   (let [r (Math/sqrt (+ (* x x) (* y y)))]
     (list r (radian-to-degree (Math/asin (/ (- x) r))))))
-
-;;; Code used to calculate the map between servo angle and arm angle
-;(def exper-data {40 {60 [13.7 11.1]   65 [13.95 9.95]  70 [13.84 8.35]  75 [13.75 6.7]   80 [13.65 5.25]  85 [13.55 4.1]} 
-;                 45 {60 [15.15 12.55] 65 [15.15 11.17] 70 [14.97 9.5]   75 [15.12 8.15]  80 [15.12 6.85]  85 [15.08 5.42]} 
-;                 50 {60 [16.3 13.82]  65 [16.42 12.53] 70 [16.33 10.87] 75 [16.42 9.45]  80 [16.37 8.07]  85 [16.4 6.8]} 
-;                 55 {60 [17.57 15.12] 65 [17.54 13.97] 70 [17.65 12.4]  75 [17.57 10.68] 80 [17.55 9.37]  85 [17.55 8.1]} 
-;                 60 {60 [18.9 16.5]   65 [18.85 15.0]  70 [18.82 13.48] 75 [18.82 11.97] 80 [18.87 10.68] 85 [18.85 9.35]} 
-;                 65 {60 [20.0 17.65]  65 [20.03 16.22] 70 [20.05 14.5]  75 [20.05 13.4]  80 [19.97 11.87] 85 [20.0 10.6]}})
-;
-;(defn calc-first-angle [data]
-; (radian-to-degree (Math/asin (/ (- data base-high) first-arm))))
-;
-;(defn calc-second-angle [data]
-; (radian-to-degree (Math/asin (/ data second-arm))))
-;
-;(defn calc-aver-for-first-angle [angle]
-; (let [samples (exper-data angle)
-;       leng    (count samples)]
-;  (calc-first-angle (/ (reduce + (map (fn [[second-arm-ang [first-high second-high]]] first-high) samples)) leng))))
-;
-;(defn calc-aver-for-second-angle [angle]
-; (let [samples (map 
-;                (fn [[_ second-angle-hash]] 
-;                 (- ((second-angle-hash angle) 0) ((second-angle-hash angle) 1))) 
-;                exper-data)
-;       leng    (count samples)]
-;  (calc-second-angle (/ (reduce + samples) leng))))
-;
-;(println (reduce merge {} (map (fn [k] {k (calc-aver-for-first-angle k)}) (keys exper-data))))
-;
-;(println (reduce merge {} (map (fn [k] {k (calc-aver-for-second-angle k)}) (keys ((first exper-data) 1)))))
-;
-;;; Code used to calculate the map between real theta and servo theta
-;(def exper-data1 [4.942 4.806 4.14 5.064 4.552])
-;(def radius 25.602)
-;(let [intervals (map #(* 2 (radian-to-degree (Math/asin (/ (/ % 2) radius)))) exper-data1)] 
-;  (println intervals)
-;  (println (map #(str %2 " " %1) (reduce #(conj %1 (+ (last %1) %2)) [(* -1 (+ (first intervals) (second intervals)))] intervals) (list -20 -10 0 10 20 30))))
 
 (defn point-dist [pt1 pt2]
   (Math/sqrt (+ (* 
@@ -156,7 +88,7 @@
           (* ratio1 (second pt1))
           (* ratio2 (second pt2)))))
 
-(defn preprocess-stroke [stroke]
+(defn fill-intra-stroke-gap [stroke]
   (defn append-point [stroke-arr new-tail]
     (let [dist (point-dist (last stroke-arr) new-tail)]
       (if (> dist 15)
@@ -171,7 +103,7 @@
       reslt-stroke
       (recur (rest left-stroke) (first left-stroke) (append-point reslt-stroke (first left-stroke))))))
 
-(defn fill-stroke-gap [strokes]
+(defn fill-inter-stroke-gap [strokes]
   (defn fill-gap [start-pt end-pt]
     (let [dist (point-dist start-pt end-pt)]
       (if (> dist 5)
@@ -203,48 +135,72 @@
         y (+ (* (Math/sin beta-rad) first-arm) (* (Math/sin (- alpha-rad)) second-arm))]
     (list (* r (Math/cos theta-rad)) y (* r (Math/sin (- theta-rad))))))
 
-(defn -main2
-  "main function"
-  [& args]
-  (with-open [fin (clojure.java.io/reader "resources/huan_strokes.txt")]
-    (let [input (load-string (string/join "\n" (line-seq fin)))
-          strokes (:strokes input)
-          scale (:scale input)
-          gaps (fill-stroke-gap strokes)
-          strokes1 (map preprocess-stroke strokes)
-          strokes-gaps (interleave (map (fn [x] (process-stroke x scale 0.0)) strokes1) 
-                                   (map (fn [x] (process-stroke x scale 2.0)) gaps))
-          strokes-z (reduce concat strokes-gaps)
-          r-theta-list (map #(apply calc-r-theta %) (map (fn [x] (take 2 x)) strokes-z))
-          alpha-beta-radian-list (map #(calc-alpha-beta (first %1) %2) r-theta-list (map (fn [x] (last x)) strokes-z))
-          alpha-beta-degree-list (map (fn [[alpha beta]] (list (get-second-angle (radian-to-degree alpha)) (get-first-angle (radian-to-degree beta)))) alpha-beta-radian-list)
-          reverse-xyz (map (fn [[alpha beta] [_ theta]] (calc-xyz alpha beta theta)) alpha-beta-degree-list r-theta-list)]
-      (dump-strokes strokes "strokes")
-      (dump-strokes gaps "gaps")
-      (dump-strokes strokes1 "strokes after preprocess")
-      (dump-strokes strokes-gaps "strokes gaps interleaved")
-      (dump-strokes strokes-z "strokes-z")
-      (dump-strokes alpha-beta-degree-list "alpha beta degree list")
-      (dump-strokes r-theta-list "r theta list")
-      (dump-strokes reverse-xyz "reverse-xyz")
-      (with-open [fin (clojure.java.io/reader "resources/machine_arm.ino")
-                  fout (clojure.java.io/writer "target/machine_arm.ino")]
-        (doseq [line (line-seq fin)]
-          (.write fout line)
-          (.write fout "\n")
-          (when (= line "// Insert Arrays Here")
-            (.write fout 
-                    (with-out-str 
-                      (if simulate
-                        (do
-                          (println (str "var alphas = [" (string/join "," (map #(str (first %)) alpha-beta-degree-list)) "];"))
-                          (println (str "var betas = [" (string/join "," (map #(str (second %)) alpha-beta-degree-list)) "];"))
-                          (println (str "var delta_thetas = [" (string/join "," (map #(str (get-base-angle (second %))) r-theta-list)) "];")))
-                        (do 
-                          (println (str "const int16_t alphas[] PROGMEM = {" (string/join "," (map #(str (first %)) alpha-beta-degree-list)) "};"))
-                          (println (str "const int16_t betas[] PROGMEM = {" (string/join "," (map #(str (second %)) alpha-beta-degree-list)) "};"))
-                          (println (str "const int16_t delta_thetas[] PROGMEM = {" (string/join "," (map #(str (get-base-angle (second %))) r-theta-list)) "};"))))))
-            (.write fout "\n")))))))
+(def ^:dynamic *serial-conn*)
+
+(defn set-angle [base-angle first-angle second-angle]
+  (println (str "--> " "a=" base-angle ",b=" first-angle ",c=" second-angle ","))
+  (.writeString *serial-conn* (str "a=" base-angle ",b=" first-angle ",c=" second-angle ","))
+  (.readBytes *serial-conn* 1)
+  (loop [reduce-str "<-- "
+         curr-char (aget (.readBytes *serial-conn* 1) 0)]
+    (if (= curr-char (byte \n))
+      (println reduce-str)
+      (recur (str reduce-str (char curr-char)) (aget (.readBytes *serial-conn* 1) 0)))))
+
+(defn calc-angle-seq [input-str]
+  (let [input (load-string input-str)
+        strokes (:strokes input)
+        scale (:scale input)
+        gaps (fill-inter-stroke-gap strokes)
+        dense-strokes (map fill-intra-stroke-gap strokes)
+        strokes-plus-gaps (interleave (map (fn [x] (process-stroke x scale 0.0)) dense-strokes) 
+                                      (map (fn [x] (process-stroke x scale 2.0)) gaps))
+        strokes-z (reduce concat strokes-plus-gaps)
+        r-theta-list (map #(apply calc-r-theta %) (map (fn [x] (take 2 x)) strokes-z))
+        alpha-beta-radian-list (map #(calc-alpha-beta (first %1) %2) r-theta-list (map (fn [x] (last x)) strokes-z))
+        alpha-beta-degree-list (map (fn [[alpha beta]] (list (radian-to-degree alpha) (radian-to-degree beta))) alpha-beta-radian-list)]
+    (map #(fn [[_ theta] [alpha beta]] (list theta beta (- 180 alpha beta))) r-theta-list alpha-beta-degree-list)))
+
+(def character-str "{:scale 480 :strokes [['(47 89) '(174 88) '(174 100) '(172 111) '(171 120) '(169 130) '(167 138) '(166 146) '(164, 154) '(161 164) '(158 176) '(154 189) '(149 202) '(145 213) '(141 223) '(135 236) '(119 267) '(113 275) '(106 286) '(100 294) '(94 304) '(87 314) '(81 321) '(75 329) '(68 338) '(62 344) '(56 350) '(50 357) '(43 363) '(26 364) '(15 365)] ['(62 172) '(70 182) '(76 189) '(82 196) '(86 200) '(91 206) '(95 211) '(100 216) '(104 222) '(108 228) '(112 234) '(117 238) '(136 266) '(142 273) '(148 282) '(154 292) '(159 299) '(163 306) '(166 310) '(170 317) '(174 323) '(179 324) '(184 324) '(189 326) '(194 326)] ['(270 43) '(267 52) '(264 62) '(262 70) '(260 78) '(258 87) '(257 96) '(254 106) '(250 115) '(248 122) '(246 129) '(243 138) '(240 146) '(238 154) '(234 162) '(231 169) '(227 178) '(224 185) '(220 193) '(216 201) '(212 209)] ['(257 108) '(416 108) '(412 114) '(411 122) '(410 130) '(406 140) '(403 148) '(400 157) '(397 166) '(394 175) '(393 178) '(387 182) '(380 184)] ['(311 186) '(310, 247) '(309 258) '(305 266) '(302 274) '(299 283) '(296 292) '(293 302) '(290 309) '(286 318) '(282 326) '(277 334) '(272 342) '(267 350) '(262 356) '(257 362) '(252 368) '(247 374) '(240 381) '(232 390) '(223 396) '(215 402) '(206 408) '(200 412) '(196 416) '(191 418) '(186 420)] ['(310 250) '(312 260) '(324 268) '(326 276) '(329 286) '(332 296) '(335 302) '(338 310) '(342 318) '(347 327) '(352 334) '(356 341) '(362 351) '(368 360) '(374 366) '(381 374) '(387 381) '(394 388) '(401 396) '(409 402) '(416 408) '(422 414) '(438 414) '(448 414)]]}")
+
+(def curr-angle (atom {:a 0 :b 90 :c 180}))
+
+(defn write-strokes [angles-seq]
+  (doseq [[base-angle first-angle second-angle] angles-seq]
+    (set-angle base-angle first-angle second-angle)
+    (swap! curr-angle (fn [_] {:a base-angle :b first-angle :c second-angle})))
+  "OK")
+
+(defroutes app
+           (GET "/" [] (redirect "index.html"))
+           (GET "/set-angle" [a b c] (if (and a b c)
+                                       (set-angle a b c)
+                                       "/set-angle?a=<base>&b=<large>&c=<small>"))
+           (GET "/write-character" _ (write-strokes (calc-angle-seq character-str)))
+           (resources "/")
+           (not-found "<h1>not found</h1>"))
+
+(def entry (site app))
+
+(defn init
+  "one time initialization work"
+  []
+  (let [ports (. SerialPortList getPortNames)
+        ;myport "/dev/tty.usbmodem1421"]
+        myport "/dev/tty.usbserial-A402XH6Q"]
+    (if (and (pos? (alength ports)) (contains? (set ports) myport))
+      (alter-var-root #'*serial-conn* 
+                      (fn [_] 
+                        (doto (SerialPort. myport)
+                          (.openPort)
+                          (.setParams 9600 8 1 0)
+                          ((fn [_] (Thread/sleep 1000))))))
+      (println "There is no serial connection!"))))
+
+(defn destroy 
+  "release acquired resources before service stops"
+  []
+  (.closePort *serial-conn*))
 
 (defn -main1
   "main function"
@@ -258,7 +214,7 @@
         square (concat upper-arm right-arm lower-arm left-arm)
         r-theta-list (map #(apply calc-r-theta %) square)
         alpha-beta-radian-list (map #(calc-alpha-beta (first %) 0) r-theta-list)
-        alpha-beta-degree-list (map (fn [[alpha beta]] (list (get-second-angle (radian-to-degree alpha)) (get-first-angle (radian-to-degree beta)))) alpha-beta-radian-list)]
+        alpha-beta-degree-list (map (fn [[alpha beta]] (list (radian-to-degree alpha) (radian-to-degree beta))) alpha-beta-radian-list)]
     (with-open [fin (clojure.java.io/reader "resources/machine_arm.ino")
                 fout (clojure.java.io/writer "target/machine_arm.ino")]
       (doseq [line (line-seq fin)]
@@ -266,46 +222,8 @@
         (.write fout "\n")
         (when (= line "// Insert Arrays Here")
           (.write fout 
-                  (with-out-str 
+                  (with-out-str
                     (println (str "const int16_t alphas[] PROGMEM = {" (string/join ", " (map #(str (first %)) alpha-beta-degree-list)) "};"))
                     (println (str "const int16_t betas[] PROGMEM = {" (string/join ", " (map #(str (second %)) alpha-beta-degree-list)) "};"))
-                    (println (str "const int16_t delta_thetas[] PROGMEM = {" (string/join ", " (map #(str (get-base-angle (second %))) r-theta-list)) "};"))))
+                    (println (str "const int16_t delta_thetas[] PROGMEM = {" (string/join ", " (map #(str (second %)) r-theta-list)) "};"))))
           (.write fout "\n"))))))
-
-(def ^{:dynamic true} *serial-conn*)
-
-;(defn set-port [idx val]
-; (.writeBytes serial-conn (byte-array [(byte \s) (byte idx) (byte val)]))
-; (aget (.readBytes serial-conn 1) 0))
-;
-;(defn query-port [idx] 
-; (.writeBytes serial-conn (byte-array [(byte \g) (byte idx)]))
-; (aget (.readBytes serial-conn 1) 0))
-
-(defroutes app
-           (GET "/" [] (redirect "index.html"))
-           (GET "/set-angle" [req] (if (:query-params req)
-                                     (set-angle req)
-                                     "/set-angle?a=<base>&b=<large>&c=<small>"))
-           (resources "/")
-           (not-found "<h1>not found</h1>"))
-
-(def entry (site app))
-
-(defn init
-  "one time initialization work"
-  []
-  (let [ports (. SerialPortList getPortNames)
-        myport "/dev/tty.usbmodem1411"]
-    (if (and (pos? (alength ports)) (contains? (set ports) myport))
-      (set! *serial-conn* 
-            (doto (SerialPort. myport)
-              (.openPort)
-              (.setParams 9600 8 1 0)
-              ((fn [_] (Thread/sleep 1000)))))
-      (println "There is no serial connection!"))))
-
-(defn destroy 
-  "release acquired resources before service stops"
-  []
-  (.closePort *serial-conn*))
