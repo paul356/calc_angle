@@ -176,7 +176,7 @@
            (GET "/set-angle" [a b c] (if (and a b c)
                                        (set-angle a b c)
                                        "/set-angle?a=<base>&b=<large>&c=<small>"))
-           (GET "/write-character" _ (write-strokes (calc-angle-seq character-str)))
+           (POST "/write-character" [strokes] (write-strokes (calc-angle-seq strokes)))
            (resources "/")
            (not-found "<h1>not found</h1>"))
 
