@@ -9,7 +9,8 @@
                            [ring/ring-defaults "0.1.5" :exclusions [javax.servlet/servlet-api]]
                            [ring/ring-core "1.4.0"]
                            [compojure "1.4.0"]
-                           [org.scream3r/jssc "2.8.0"]]
+                           [org.scream3r/jssc "2.8.0"]
+                           [cljs-ajax "0.5.3"]]
 
             :plugins [[lein-cljsbuild "1.1.1"]
                       [lein-figwheel "0.5.0-3"]
