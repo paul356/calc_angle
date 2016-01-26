@@ -30,7 +30,7 @@
   (str "{" :scale " " (.-width (.getElementById js/document "canvas")) " " :strokes " [" (string/join " " @strokes) "]}"))
 
 (defn call-set-strokes []
-  (POST "/write-character" {:params {:strokes (format-strokes)}}))
+  (POST "/write-character" {:format :url :params {:strokes (format-strokes)}}))
 
 (defn start []
   (let [canvas2d (.getElementById js/document "canvas")
