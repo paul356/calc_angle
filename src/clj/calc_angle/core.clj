@@ -4,7 +4,7 @@
             [ring.middleware.defaults :refer [wrap-defaults site-defaults]]
             [ring.middleware.params :refer [wrap-params]]
             [ring.util.response :refer [redirect]]
-            [compojure.core :refer [GET defroutes]]
+            [compojure.core :refer [GET POST defroutes]]
             [compojure.handler :refer [site]]
             [compojure.route :refer [resources not-found]]
             [clojure.java.io :as io])
@@ -159,6 +159,7 @@
         r-theta-list (map #(apply calc-r-theta %) (map (fn [x] (take 2 x)) strokes-z))
         alpha-beta-radian-list (map #(calc-alpha-beta (first %1) %2) r-theta-list (map (fn [x] (last x)) strokes-z))
         alpha-beta-degree-list (map (fn [[alpha beta]] (list (radian-to-degree alpha) (radian-to-degree beta))) alpha-beta-radian-list)]
+    (println input-str)
     (map #(fn [[_ theta] [alpha beta]] (list theta beta (- 180 alpha beta))) r-theta-list alpha-beta-degree-list)))
 
 (def character-str "{:scale 480 :strokes [['(47 89) '(174 88) '(174 100) '(172 111) '(171 120) '(169 130) '(167 138) '(166 146) '(164, 154) '(161 164) '(158 176) '(154 189) '(149 202) '(145 213) '(141 223) '(135 236) '(119 267) '(113 275) '(106 286) '(100 294) '(94 304) '(87 314) '(81 321) '(75 329) '(68 338) '(62 344) '(56 350) '(50 357) '(43 363) '(26 364) '(15 365)] ['(62 172) '(70 182) '(76 189) '(82 196) '(86 200) '(91 206) '(95 211) '(100 216) '(104 222) '(108 228) '(112 234) '(117 238) '(136 266) '(142 273) '(148 282) '(154 292) '(159 299) '(163 306) '(166 310) '(170 317) '(174 323) '(179 324) '(184 324) '(189 326) '(194 326)] ['(270 43) '(267 52) '(264 62) '(262 70) '(260 78) '(258 87) '(257 96) '(254 106) '(250 115) '(248 122) '(246 129) '(243 138) '(240 146) '(238 154) '(234 162) '(231 169) '(227 178) '(224 185) '(220 193) '(216 201) '(212 209)] ['(257 108) '(416 108) '(412 114) '(411 122) '(410 130) '(406 140) '(403 148) '(400 157) '(397 166) '(394 175) '(393 178) '(387 182) '(380 184)] ['(311 186) '(310, 247) '(309 258) '(305 266) '(302 274) '(299 283) '(296 292) '(293 302) '(290 309) '(286 318) '(282 326) '(277 334) '(272 342) '(267 350) '(262 356) '(257 362) '(252 368) '(247 374) '(240 381) '(232 390) '(223 396) '(215 402) '(206 408) '(200 412) '(196 416) '(191 418) '(186 420)] ['(310 250) '(312 260) '(324 268) '(326 276) '(329 286) '(332 296) '(335 302) '(338 310) '(342 318) '(347 327) '(352 334) '(356 341) '(362 351) '(368 360) '(374 366) '(381 374) '(387 381) '(394 388) '(401 396) '(409 402) '(416 408) '(422 414) '(438 414) '(448 414)]]}")
@@ -176,7 +177,8 @@
            (GET "/set-angle" [a b c] (if (and a b c)
                                        (set-angle a b c)
                                        "/set-angle?a=<base>&b=<large>&c=<small>"))
-           (POST "/write-character" [strokes] (write-strokes (calc-angle-seq strokes)))
+           ;(POST "/write-character" [strokes] (write-strokes (calc-angle-seq strokes)))
+           (POST "/write-character" req (println req))
            (resources "/")
            (not-found "<h1>not found</h1>"))
 

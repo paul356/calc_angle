@@ -30,16 +30,18 @@
   (str "{" :scale " " (.-width (.getElementById js/document "canvas")) " " :strokes " [" (string/join " " @strokes) "]}"))
 
 (defn call-set-strokes []
-  (POST "/write-character" {:param {:strokes (format-strokes)}}))
+  (POST "/write-character" {:params {:strokes (format-strokes)}}))
 
 (defn start []
   (let [canvas2d (.getElementById js/document "canvas")
         context2d (.getContext canvas2d "2d")
-        image (.getElementById js/document "background")]
+        image (.getElementById js/document "background")
+        button (.getElementById js/document "go-btn")]
     (.drawImage context2d image 0 0)
     (set! (.-onmousemove canvas2d) handle-mousemove)
     (set! (.-onmousedown canvas2d) handle-mousedown)
-    (set! (.-onmouseup canvas2d) handle-mouseup)))
+    (set! (.-onmouseup canvas2d) handle-mouseup)
+    (set! (.-onclick button) call-set-strokes)))
 
 (defn on-js-reload []
   ;; optionally touch your app-state to force rerendering depending on
