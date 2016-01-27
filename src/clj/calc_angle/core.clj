@@ -15,11 +15,14 @@
 
 (def PI Math/PI)
 
-(def base-high 10.3)
+;; 
+;; Write field is x (-10, 10) y (22, 32)
+;;
+(def min-y 22)
+(def field-size 20)
 
-(def first-arm 14.)
-
-(def second-arm 15.2)
+(def first-arm 22.2)
+(def second-arm 25.0)
 
 (defn to-int [val]
   (int (+ 0.5 val)))
@@ -120,7 +123,7 @@
         (conj reslt-strokes (fill-gap (last last-stroke) (first (first left-strokes))))))))
 
 (defn process-stroke [stroke scale default-z]
-  (map (fn [[x y]] (list (- (* 15. (/ x scale)) 7.5) (+ (* 15. (/ (- scale y) scale)) 7.5) default-z)) stroke))
+  (map (fn [[x y]] (list (- (* field-size (/ x scale)) (/ field-size 2.)) (+ (* field-size (/ (- scale y) scale)) min-y) default-z)) stroke))
 
 (defn dump-strokes [strokes title]
   (println (str title " >>>"))
@@ -141,13 +144,13 @@
   (let [serial-str (format "a=%.3f,b=%.3f,c=%.3f," base-angle first-angle second-angle)]
     (println (str "--> " serial-str))
     (.writeString *serial-conn* serial-str)
-    (let [echo (aget (.readBytes *serial-conn* 1) 0)]
+    (let [echo (char (aget (.readBytes *serial-conn* 1) 0))]
       (when-not (= echo \0) (println (str echo " angle out of range"))))
     (loop [reduce-str "<-- "
-           curr-char (aget (.readBytes *serial-conn* 1) 0)]
-      (if (= curr-char (byte \n))
+           curr-char (char (aget (.readBytes *serial-conn* 1) 0))]
+      (if (= curr-char \newline)
         (println reduce-str)
-        (recur (str reduce-str (char curr-char)) (aget (.readBytes *serial-conn* 1) 0))))))
+        (recur (str reduce-str curr-char) (char (aget (.readBytes *serial-conn* 1) 0)))))))
 
 (defn calc-angle-seq [input-str]
   (let [input (load-string input-str)
@@ -162,7 +165,7 @@
         alpha-beta-radian-list (map #(calc-alpha-beta (first %1) %2) r-theta-list (map (fn [x] (last x)) strokes-z))
         alpha-beta-degree-list (map (fn [[alpha beta]] (list (radian-to-degree alpha) (radian-to-degree beta))) alpha-beta-radian-list)]
     (println input-str)
-    (map (fn [[_ theta] [alpha beta]] (list theta beta (- 180 alpha beta))) r-theta-list alpha-beta-degree-list)))
+    (map (fn [[_ theta] [alpha beta]] (list (- theta) (- 90. beta) (+ alpha beta))) r-theta-list alpha-beta-degree-list)))
 
 (defn write-strokes [angles-seq]
   (doseq [[base-angle first-angle second-angle] angles-seq]
