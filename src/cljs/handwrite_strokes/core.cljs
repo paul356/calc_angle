@@ -12,36 +12,58 @@
 
 (defonce mouse-down (atom false))
 (defonce strokes (atom []))
-(defonce curr-stroke (atom "["))
+(defonce curr-stroke (atom []))
 
 (defn handle-mouseup [evt]
-  (swap! strokes (fn [arr] (conj arr (str @curr-stroke "]"))))
-  (swap! curr-stroke (fn [_] "["))
+  (swap! strokes (fn [arr] (conj arr @curr-stroke)))
+  (swap! curr-stroke (fn [_] []))
   (swap! mouse-down (fn [_] false)))
 
 (defn handle-mousedown [evt]
   (swap! mouse-down (fn [_] true)))
 
-(defn handle-mousemove [evt]
-  (when @mouse-down 
-    (swap! curr-stroke (fn [curr-str] (str curr-str (str "'(" (.-offsetX evt) " " (.-offsetY evt) ") "))))))
+(defn handle-mousemove [context2d]
+  (fn [evt]
+    (when @mouse-down
+      (when (> (count @curr-stroke) 0) 
+        (.beginPath context2d)
+        (.moveTo context2d (first (last @curr-stroke)) (second (last @curr-stroke)))
+        (.lineTo context2d (.-offsetX evt) (.-offsetY evt))
+        (.stroke context2d))
+      (swap! curr-stroke (fn [arr] (conj arr [(.-offsetX evt) (.-offsetY evt)]))))))
 
 (defn format-strokes []
-  (str "{" :scale " " (.-width (.getElementById js/document "canvas")) " " :strokes " [" (string/join " " @strokes) "]}"))
+  (defn format-stroke [arr] (str "[" 
+                                 (string/join " " (map (fn [[x y]] (str "'(" x " " y ")")) arr))
+                                 "]"))
+  (str "{" 
+       :scale " " (.-width (.getElementById js/document "canvas")) " " 
+       :strokes " [" (string/join " " (map format-stroke @strokes)) "]}"))
 
 (defn call-set-strokes []
-  (POST "/write-character" {:format :url :params {:strokes (format-strokes)}}))
+  (POST "/write-character" {:format :url :params {:strokes (format-strokes)}})
+  (swap! strokes (fn [_] []))
+  (swap! curr-stroke (fn [_] [])))
+
+(defn clear-strokes [context2d image]
+  (fn [_]
+    (swap! strokes (fn [_] []))
+    (swap! curr-stroke (fn [_] []))
+    (.drawImage context2d image 0 0)))
 
 (defn start []
   (let [canvas2d (.getElementById js/document "canvas")
         context2d (.getContext canvas2d "2d")
         image (.getElementById js/document "background")
-        button (.getElementById js/document "go-btn")]
+        go-btn (.getElementById js/document "go-btn")
+        clear-btn (.getElementById js/document "clear-btn")]
+    (set! (.-strokeStyle context2d) "red")
     (.drawImage context2d image 0 0)
-    (set! (.-onmousemove canvas2d) handle-mousemove)
+    (set! (.-onmousemove canvas2d) (handle-mousemove context2d))
     (set! (.-onmousedown canvas2d) handle-mousedown)
     (set! (.-onmouseup canvas2d) handle-mouseup)
-    (set! (.-onclick button) call-set-strokes)))
+    (set! (.-onclick go-btn) call-set-strokes)
+    (set! (.-onclick clear-btn) (clear-strokes context2d image))))
 
 (defn on-js-reload []
   ;; optionally touch your app-state to force rerendering depending on

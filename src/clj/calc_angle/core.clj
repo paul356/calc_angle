@@ -21,7 +21,8 @@
 (def min-y 22)
 (def field-size 20)
 
-(def first-arm 22.2)
+(def base-high 25.4)
+(def first-arm 20.9)
 (def second-arm 25.0)
 
 (defn to-int [val]
