@@ -41,9 +41,7 @@
        :strokes " [" (string/join " " (map format-stroke @strokes)) "]}"))
 
 (defn call-set-strokes []
-  (POST "/write-character" {:format :url :params {:strokes (format-strokes)}})
-  (swap! strokes (fn [_] []))
-  (swap! curr-stroke (fn [_] [])))
+  (POST "/write-character" {:format :url :params {:strokes (format-strokes)}}))
 
 (defn clear-strokes [context2d image]
   (fn [_]
@@ -51,19 +49,24 @@
     (swap! curr-stroke (fn [_] []))
     (.drawImage context2d image 0 0)))
 
+(defn reset-angles []
+  (GET "/reset-angles"))
+
 (defn start []
   (let [canvas2d (.getElementById js/document "canvas")
         context2d (.getContext canvas2d "2d")
         image (.getElementById js/document "background")
         go-btn (.getElementById js/document "go-btn")
-        clear-btn (.getElementById js/document "clear-btn")]
+        clear-btn (.getElementById js/document "clear-btn")
+        reset-btn (.getElementById js/document "reset-btn")]
     (set! (.-strokeStyle context2d) "red")
     (.drawImage context2d image 0 0)
     (set! (.-onmousemove canvas2d) (handle-mousemove context2d))
     (set! (.-onmousedown canvas2d) handle-mousedown)
     (set! (.-onmouseup canvas2d) handle-mouseup)
     (set! (.-onclick go-btn) call-set-strokes)
-    (set! (.-onclick clear-btn) (clear-strokes context2d image))))
+    (set! (.-onclick clear-btn) (clear-strokes context2d image))
+    (set! (.-onclick reset-btn) reset-angles)))
 
 (defn on-js-reload []
   ;; optionally touch your app-state to force rerendering depending on

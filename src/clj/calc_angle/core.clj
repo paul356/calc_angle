@@ -154,6 +154,7 @@
         (recur (str reduce-str curr-char) (char (aget (.readBytes *serial-conn* 1) 0)))))))
 
 (defn calc-angle-seq [input-str]
+  (println input-str)
   (let [input (load-string input-str)
         strokes (:strokes input)
         scale (:scale input)
@@ -165,7 +166,6 @@
         r-theta-list (map #(apply calc-r-theta %) (map (fn [x] (take 2 x)) strokes-z))
         alpha-beta-radian-list (map #(calc-alpha-beta (first %1) %2) r-theta-list (map (fn [x] (last x)) strokes-z))
         alpha-beta-degree-list (map (fn [[alpha beta]] (list (radian-to-degree alpha) (radian-to-degree beta))) alpha-beta-radian-list)]
-    (println input-str)
     (map (fn [[_ theta] [alpha beta]] (list (- theta) (- 90. beta) (+ alpha beta))) r-theta-list alpha-beta-degree-list)))
 
 (defn write-strokes [angles-seq]
@@ -178,6 +178,7 @@
            (GET "/set-angle" [a b c] (if (and a b c)
                                        (set-angle a b c)
                                        "/set-angle?a=<base>&b=<large>&c=<small>"))
+           (GET "/reset-angles" _ (write-strokes [[0. 0. 0.]]))
            (POST "/write-character" [strokes] (write-strokes (calc-angle-seq strokes)))
            (resources "/")
            (not-found "<h1>not found</h1>"))
