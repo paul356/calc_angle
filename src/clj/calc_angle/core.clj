@@ -141,17 +141,25 @@
 
 (def ^:dynamic *serial-conn*)
 
+(defn set-count [cnt]
+  (let [count-str (format "s=%d," cnt)]
+    (println (str "--> " count-str))
+    (.writeString *serial-conn* count-str)
+    (println (str "<-- " (char (aget (.readBytes *serial-conn* 1) 0))))))
+
+(defn kick-action []
+  (let [draw-str "d"]
+    (println (str "--> " draw-str))
+    (.writeString *serial-conn* draw-str)
+    (println (str "<-- " (char (aget (.readBytes *serial-conn* 1) 0))))))
+
 (defn set-angle [base-angle first-angle second-angle]
   (let [serial-str (format "a=%.3f,b=%.3f,c=%.3f," base-angle first-angle second-angle)]
     (println (str "--> " serial-str))
     (.writeString *serial-conn* serial-str)
     (let [echo (char (aget (.readBytes *serial-conn* 1) 0))]
-      (when-not (= echo \0) (println (str echo " angle out of range"))))
-    (loop [reduce-str "<-- "
-           curr-char (char (aget (.readBytes *serial-conn* 1) 0))]
-      (if (= curr-char \newline)
-        (println reduce-str)
-        (recur (str reduce-str curr-char) (char (aget (.readBytes *serial-conn* 1) 0)))))))
+      (when-not (= echo \0) (println (str echo " angle out of range")))
+      (println (str "<-- " echo)))))
 
 (defn calc-angle-seq [input-str]
   (println input-str)
@@ -169,8 +177,10 @@
     (map (fn [[_ theta] [alpha beta]] (list (- theta) (- 90. beta) (+ alpha beta))) r-theta-list alpha-beta-degree-list)))
 
 (defn write-strokes [angles-seq]
+  (set-count (count angles-seq))
   (doseq [[base-angle first-angle second-angle] angles-seq]
     (set-angle base-angle first-angle second-angle))
+  (kick-action)
   "OK")
 
 (defroutes app
