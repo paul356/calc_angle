@@ -33,12 +33,12 @@
       (swap! curr-stroke (fn [arr] (conj arr [(.-offsetX evt) (.-offsetY evt)]))))))
 
 (defn format-strokes []
-  (defn format-stroke [arr] (str "[" 
+  (defn format-stroke [arr] (str "(list " 
                                  (string/join " " (map (fn [[x y]] (str "'(" x " " y ")")) arr))
-                                 "]"))
+                                 ")"))
   (str "{" 
        :scale " " (.-width (.getElementById js/document "canvas")) " " 
-       :strokes " [" (string/join " " (map format-stroke @strokes)) "]}"))
+       :strokes " (list " (string/join " " (map format-stroke @strokes)) ")}"))
 
 (defn call-set-strokes []
   (POST "/write-character" {:format :url :params {:strokes (format-strokes)}}))
