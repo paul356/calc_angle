@@ -215,28 +215,3 @@
   []
   (.closePort *serial-conn*))
 
-(defn -main1
-  "main function"
-  [& args]
-  (let [x-list (range -7 7 0.5)
-        y-list (range 10 24 0.5)
-        upper-arm (map #(list %1 %2) x-list (repeat 24))
-        right-arm (map #(list %1 %2) (repeat 7) (reverse y-list))
-        lower-arm (map #(list %1 %2) (reverse x-list) (repeat 10))
-        left-arm (map #(list %1 %2) (repeat -7) y-list)
-        square (concat upper-arm right-arm lower-arm left-arm)
-        r-theta-list (map #(apply calc-r-theta %) square)
-        alpha-beta-radian-list (map #(calc-alpha-beta (first %) 0) r-theta-list)
-        alpha-beta-degree-list (map (fn [[alpha beta]] (list (radian-to-degree alpha) (radian-to-degree beta))) alpha-beta-radian-list)]
-    (with-open [fin (clojure.java.io/reader "resources/machine_arm.ino")
-                fout (clojure.java.io/writer "target/machine_arm.ino")]
-      (doseq [line (line-seq fin)]
-        (.write fout line)
-        (.write fout "\n")
-        (when (= line "// Insert Arrays Here")
-          (.write fout 
-                  (with-out-str
-                    (println (str "const int16_t alphas[] PROGMEM = {" (string/join ", " (map #(str (first %)) alpha-beta-degree-list)) "};"))
-                    (println (str "const int16_t betas[] PROGMEM = {" (string/join ", " (map #(str (second %)) alpha-beta-degree-list)) "};"))
-                    (println (str "const int16_t delta_thetas[] PROGMEM = {" (string/join ", " (map #(str (second %)) r-theta-list)) "};"))))
-          (.write fout "\n"))))))
