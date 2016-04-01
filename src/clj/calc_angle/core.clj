@@ -18,8 +18,9 @@
 ;; 
 ;; Write field is x (-10, 10) y (22, 32)
 ;;
-(def min-y 22)
-(def field-size 20)
+(def min-y 18)
+(def xfield-size 20)
+(def yfield-size 10)
 
 (def base-high 25.4)
 (def first-arm 20.9)
@@ -115,16 +116,16 @@
         [start-pt end-pt])))
   (loop [left-strokes (rest strokes)
          last-stroke  (first strokes)
-         reslt-strokes []]
+         reslt-strokes [[(first (first strokes))]]]
     (if (zero? (count left-strokes))
-      (conj reslt-strokes (fill-gap (last last-stroke) (first (first strokes))))
+      (conj reslt-strokes [(last last-stroke)])
       (recur 
         (rest left-strokes) 
         (first left-strokes) 
         (conj reslt-strokes (fill-gap (last last-stroke) (first (first left-strokes))))))))
 
-(defn process-stroke [stroke scale default-z]
-  (map (fn [[x y]] (list (- (* field-size (/ x scale)) (/ field-size 2.)) (+ (* field-size (/ (- scale y) scale)) min-y) default-z)) stroke))
+(defn process-stroke [stroke xscale yscale default-z]
+  (map (fn [[x y]] (list (- (* xfield-size (/ x xscale)) (/ xfield-size 2.)) (+ (* yfield-size (/ (- yscale y) yscale)) min-y) default-z)) stroke))
 
 (defn dump-strokes [strokes title]
   (println (str title " >>>"))
@@ -153,42 +154,46 @@
     (.writeString *serial-conn* draw-str)
     (println (str "<-- " (char (aget (.readBytes *serial-conn* 1) 0))))))
 
-(defn set-angle [base-angle first-angle second-angle]
-  (let [serial-str (format "a=%.3f,b=%.3f,c=%.3f," base-angle first-angle second-angle)]
-    (println (str "--> " serial-str))
+(defn set-angle [base-angle first-angle second-angle last-angle]
+  (let [serial-str (format "a=%.3f,b=%.3f,c=%.3f,d=%.3f," base-angle first-angle second-angle last-angle)]
+    ;(println (str "--> " serial-str))
     (.writeString *serial-conn* serial-str)
     (let [echo (char (aget (.readBytes *serial-conn* 1) 0))]
-      (when-not (= echo \0) (println (str echo " angle out of range")))
-      (println (str "<-- " echo)))))
+      (when-not (= echo \0) (println (str echo " angle out of range - " serial-str))))))
+      ;(println (str "<-- " echo)))))
 
 (defn calc-angle-seq [input-str]
   (println input-str)
   (let [input (load-string input-str)
         strokes (:strokes input)
-        scale (:scale input)
+        xscale (:xscale input)
+        yscale (:yscale input)
         gaps (fill-inter-stroke-gap strokes)
         dense-strokes (map fill-intra-stroke-gap strokes)
-        strokes-plus-gaps (interleave (map (fn [x] (process-stroke x scale 0.0)) dense-strokes) 
-                                      (map (fn [x] (process-stroke x scale 2.0)) gaps))
+        ;; gaps has one element than dense-strokes
+        strokes-plus-gaps (concat (interleave (map (fn [x] (process-stroke x xscale yscale 7.0)) gaps)
+                                              (map (fn [x] (process-stroke x xscale yscale 5.0)) dense-strokes))
+                                  (list (process-stroke (last gaps) xscale yscale 7.0)))
         strokes-z (reduce concat strokes-plus-gaps)
         r-theta-list (map #(apply calc-r-theta %) (map (fn [x] (take 2 x)) strokes-z))
         alpha-beta-radian-list (map #(calc-alpha-beta (first %1) %2) r-theta-list (map (fn [x] (last x)) strokes-z))
         alpha-beta-degree-list (map (fn [[alpha beta]] (list (radian-to-degree alpha) (radian-to-degree beta))) alpha-beta-radian-list)]
-    (map (fn [[_ theta] [alpha beta]] (list (- theta) (- 90. beta) (+ alpha beta))) r-theta-list alpha-beta-degree-list)))
+    (map (fn [[_ theta] [alpha beta]] (list (- theta) (- 90. beta) (+ alpha beta) alpha)) r-theta-list alpha-beta-degree-list)))
 
 (defn write-strokes [angles-seq]
   (set-count (count angles-seq))
-  (doseq [[base-angle first-angle second-angle] angles-seq]
-    (set-angle base-angle first-angle second-angle))
+  (doseq [angles angles-seq]
+    (apply set-angle angles))
   (kick-action)
   "OK")
 
 (defroutes app
            (GET "/" [] (redirect "index.html"))
-           (GET "/set-angle" [a b c] (if (and a b c)
-                                       (set-angle a b c)
-                                       "/set-angle?a=<base>&b=<large>&c=<small>"))
-           (GET "/reset-angles" _ (write-strokes [[0. 0. 0.]]))
+           (GET "/set-angle" [a b c d] (if (and a b c d)
+                                       (set-angle a b c d)
+                                       "/set-angle?a=<base>&b=<large>&c=<small>&d=<last>"))
+           ;(GET "/reset-angles" _ (write-strokes [[0. 90. 90. 0.]]))
+           (GET "/reset-angles" _ (write-strokes [[0. 0. 0. 0.]]))
            (POST "/write-character" [strokes] (write-strokes (calc-angle-seq strokes)))
            (resources "/")
            (not-found "<h1>not found</h1>"))

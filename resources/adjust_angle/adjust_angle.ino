@@ -1,22 +1,23 @@
 #include <EEPROM.h>
 
-#define NSTEPPERS 3
+#define NSTEPPERS 4
 #define STEP_DIVIDE 1
-#define HALF_PULSE 50
-#define MAX_TRIPLES 333
+#define HALF_PULSE 100
+#define MAX_TRIPLES (4000/(sizeof(long)*NSTEPPERS))
 
 #define PULSE_DEGREE_RATIO_BASE ((long)8000L*6.75)
 #define PULSE_DEGREE_RATIO_FIRST ((long)8000L*15.375)
 #define PULSE_DEGREE_RATIO_SECOND ((long)8000L*11.25)
+#define PULSE_DEGREE_RATIO_LAST ((long)800L)
 
-long pulse_degree_ratio [NSTEPPERS] = {PULSE_DEGREE_RATIO_BASE, PULSE_DEGREE_RATIO_FIRST, PULSE_DEGREE_RATIO_SECOND};
-long real_angles        [NSTEPPERS] = {0*PULSE_DEGREE_RATIO_BASE/360., 0*PULSE_DEGREE_RATIO_FIRST/360., 0*PULSE_DEGREE_RATIO_SECOND/360.};
+long pulse_degree_ratio [NSTEPPERS] = {PULSE_DEGREE_RATIO_BASE, PULSE_DEGREE_RATIO_FIRST, PULSE_DEGREE_RATIO_SECOND, PULSE_DEGREE_RATIO_LAST};
+long real_angles        [NSTEPPERS] = {0*PULSE_DEGREE_RATIO_BASE/360., 0*PULSE_DEGREE_RATIO_FIRST/360., 0*PULSE_DEGREE_RATIO_SECOND/360., 0*PULSE_DEGREE_RATIO_LAST};
 
-float degree_limits     [NSTEPPERS][2] = {{-90., 90.}, {0., 90.}, {0., 135.}};
+float degree_limits     [NSTEPPERS][2] = {{-90., 90.}, {0., 90.}, {-0., 135.}, {-90., 90.}};
 
-const int enable_pin    [NSTEPPERS] = {55, 5, 25};
-const int direction_pin [NSTEPPERS] = {60, 54, 27};
-const int step_pin      [NSTEPPERS] = {56, 4, 26};
+const int enable_pin    [NSTEPPERS] = {55, 5, 25, 34};
+const int direction_pin [NSTEPPERS] = {60, 54, 27, 36};
+const int step_pin      [NSTEPPERS] = {56, 4, 26, 35};
 
 void setup()
 {
@@ -125,7 +126,7 @@ void pulse_stepper(int idx, long delta, int dir)
 
 void change_to_angle(long angles[])
 {
-    long pulse_done[NSTEPPERS] = {0, 0, 0};
+    long pulse_done[NSTEPPERS] = {0, 0, 0, 0};
 
     long pulse_delta[NSTEPPERS];
     int  pulse_dir[NSTEPPERS];
@@ -178,7 +179,7 @@ void echo_done (int ret)
 
 void dump_real_angles ()
 {
-    char prefix[] = {'a', 'b', 'c'};
+    char prefix[] = {'a', 'b', 'c', 'd'};
     for (int j=0; j<NSTEPPERS; j++) {
         Serial.print(prefix[j]);
         Serial.print('=');

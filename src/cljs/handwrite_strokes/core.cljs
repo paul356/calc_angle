@@ -32,16 +32,17 @@
         (.stroke context2d))
       (swap! curr-stroke (fn [arr] (conj arr [(.-offsetX evt) (.-offsetY evt)]))))))
 
-(defn format-strokes []
+(defn format-strokes [stroke-lst]
   (defn format-stroke [arr] (str "(list " 
                                  (string/join " " (map (fn [[x y]] (str "'(" x " " y ")")) arr))
                                  ")"))
   (str "{" 
-       :scale " " (.-width (.getElementById js/document "canvas")) " " 
-       :strokes " (list " (string/join " " (map format-stroke @strokes)) ")}"))
+       :xscale " " (.-width (.getElementById js/document "canvas")) " " 
+       :yscale " " (.-height (.getElementById js/document "canvas")) " "
+       :strokes " (list " (string/join " " (map format-stroke stroke-lst)) ")}"))
 
-(defn call-set-strokes []
-  (POST "/write-character" {:format :url :params {:strokes (format-strokes)}}))
+(defn call-set-strokes [stroke-lst]
+  (POST "/write-character" {:format :url :params {:strokes (format-strokes (list (first stroke-lst)))} :handler (fn [reponse] (when (> (count stroke-lst) 1) (call-set-strokes (rest stroke-lst))))}))
 
 (defn clear-strokes [context2d image]
   (fn [_]
@@ -64,7 +65,7 @@
     (set! (.-onmousemove canvas2d) (handle-mousemove context2d))
     (set! (.-onmousedown canvas2d) handle-mousedown)
     (set! (.-onmouseup canvas2d) handle-mouseup)
-    (set! (.-onclick go-btn) call-set-strokes)
+    (set! (.-onclick go-btn) (fn [_] (call-set-strokes @strokes)))
     (set! (.-onclick clear-btn) (clear-strokes context2d image))
     (set! (.-onclick reset-btn) reset-angles)))
 
