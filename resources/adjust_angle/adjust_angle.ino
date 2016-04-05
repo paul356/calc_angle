@@ -3,7 +3,7 @@
 #define NSTEPPERS 4
 #define STEP_DIVIDE 1
 #define HALF_PULSE 100
-#define MAX_TRIPLES (4000/(sizeof(long)*NSTEPPERS))
+#define MAX_TRIPLES (4000L/(sizeof(long)*NSTEPPERS))
 
 #define PULSE_DEGREE_RATIO_BASE ((long)8000L*6.75)
 #define PULSE_DEGREE_RATIO_FIRST ((long)8000L*15.375)
@@ -19,12 +19,19 @@ const int enable_pin    [NSTEPPERS] = {55, 5, 25, 34};
 const int direction_pin [NSTEPPERS] = {60, 54, 27, 36};
 const int step_pin      [NSTEPPERS] = {56, 4, 26, 35};
 
+const float hardcoded[] PROGMEM = {
+#include "dump_degrees_prefix.h"
+#include "dump_degrees.h"
+    1., 0., 0., 0., 0., 0};
+
 void setup()
 {
     Serial.begin(9600);
     while (!Serial) {
         ;
     }
+
+    Serial.setTimeout(1000);
 
     for (int i=0; i<NSTEPPERS; i++) {
         pinMode(enable_pin[i], OUTPUT);
@@ -47,13 +54,39 @@ long angle_to_pulse(float deg, int idx)
     //return (long)(deg * pulse_degree_ratio[idx]);
 }
 
-int serial_read_sync()
+int serial_read_sync(char *ch, int secs)
 {
+    int  ret;
+    int  seconds = 0;
     while (1) {
-        if (Serial.available() > 0) {
-            return Serial.read();
+        ret = Serial.readBytes(ch, 1);
+        if (ret) {
+            return 0;
+        } else {
+            seconds += 1;
+            if (secs && seconds >= secs) {
+                return 2;
+            }
         }
     }
+    return 1;
+}
+
+int angle_to_pulse_with_check(float deg, int idx, long *pulse)
+{
+    int ret = 0;
+
+    if (deg < degree_limits[idx][0]) {
+        deg = degree_limits[idx][0];
+        ret = idx + 1;
+    }
+    if (deg > degree_limits[idx][1]) {
+        deg = degree_limits[idx][1];
+        ret = idx + 1;
+    }
+    *pulse = angle_to_pulse(deg, idx);
+
+    return ret;
 }
 
 int read_angles()
@@ -61,12 +94,17 @@ int read_angles()
     float degs[NSTEPPERS];
     long  angles[NSTEPPERS];
     char  ch = 0; // fake intial value
+    char  tch;
     long  count = 0;
     int   ret = 0;
     int   address = 0;
 
-    while (ch != 's' && ch != 'd') {
-        ch = serial_read_sync();
+    while (ch != 's' && ch != 'd' && ch != 'h') {
+        ret = serial_read_sync(&ch, 120);
+        if (ret == 2) {
+            // Timeout then write hardcoded strokes
+            return 2;
+        }
     } 
 
     if (ch == 'd') {
@@ -74,36 +112,37 @@ int read_angles()
         return 1;
     }
 
-    // ch should be 's', now to read in the angles
-    serial_read_sync();
-    count = Serial.parseInt();
-    if (count > MAX_TRIPLES) {
-        count = MAX_TRIPLES;
+    // Perform hardcoded strokes
+    if (ch == 'h') {
+        echo_done(0);
+        return 2;
     }
-    EEPROM.put(address, count);
+
+    // ch should be 's', now to read in the angles
+    serial_read_sync(&tch, 0);
+    count = Serial.parseInt();
+
+    if (count > MAX_TRIPLES) {
+        EEPROM.put(address, (long)MAX_TRIPLES);
+    } else {
+        EEPROM.put(address, count);
+    }
     address += sizeof(count);
     echo_done(0);
 
     for (long k=0; k<count; k++) {
         ret = 0;
         for (int i=0; i<NSTEPPERS; i++) {
-            serial_read_sync();
-            serial_read_sync();
+            serial_read_sync(&tch, 0);
+            serial_read_sync(&tch, 0);
             degs[i] = Serial.parseFloat();
 
-            if (degs[i] < degree_limits[i][0]) {
-                degs[i] = degree_limits[i][0];
-                ret = i+1;
-            }
-            if (degs[i] > degree_limits[i][1]) {
-                degs[i] = degree_limits[i][1];
-                ret = i+1;
-            }
+            ret = angle_to_pulse_with_check(degs[i], i, &angles[i]);
 
-            angles[i] = angle_to_pulse(degs[i], i);
-
-            EEPROM.put(address, angles[i]);
-            address += sizeof(angles[i]);
+            if (k < MAX_TRIPLES) {
+                EEPROM.put(address, angles[i]);
+                address += sizeof(angles[i]);
+            }
         }
         echo_done(ret);
     }
@@ -206,9 +245,46 @@ void run_angles()
     }
 }
 
+void run_hardcoded()
+{
+    long offset = 0;
+    long start = pgm_get_far_address(hardcoded);
+    long count = 0;
+    float degs[NSTEPPERS];
+    long angles[NSTEPPERS];
+
+    int first = 1;
+    while (count = (long)pgm_read_float_far(start + offset)) {
+        offset += sizeof(float);
+        for (long i = 0; i < count; i ++) {
+            for (long k = 0; k < NSTEPPERS; k ++) {
+                degs[k] = pgm_read_float_far(start + offset);
+                angle_to_pulse_with_check(degs[k], k, &angles[k]);
+
+                offset += sizeof(float);
+            }
+
+            change_to_angle(&angles[0]);
+        }
+
+        if (first) {
+            delay(5000);
+            first = 0;
+        }
+    }
+}
+
 void loop()
 {
-    if (read_angles()) {
-        run_angles();
+    int cmd = read_angles();
+    switch (cmd) {
+        case 1:
+            run_angles();
+            break;
+        case 2:
+            run_hardcoded();
+            break;
+        default:
+            break;
     }
 }

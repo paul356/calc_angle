@@ -24,7 +24,8 @@
 
 (def base-high 25.4)
 (def first-arm 20.9)
-(def second-arm 25.0)
+(def second-arm 24.0)
+(def offset-last 5.2)
 
 (defn to-int [val]
   (int (+ 0.5 val)))
@@ -74,8 +75,9 @@
 ;; theta is the angle of the projection in x-y plane relative to y positive
 ;;
 (defn calc-r-theta [x y]
-  (let [r (Math/sqrt (+ (* x x) (* y y)))]
-    (list r (radian-to-degree (Math/asin (/ (- x) r))))))
+  (let [norm (Math/sqrt (+ (* x x) (* y y)))
+        r (Math/sqrt (- (+ (* x x) (* y y)) (* offset-last offset-last)))]
+    (list r (radian-to-degree (- (Math/asin (/ (- x) r)) (Math/asin (/ offset-last norm)))))))
 
 (defn point-dist [pt1 pt2]
   (Math/sqrt (+ (* 
@@ -140,7 +142,8 @@
         y (+ (* (Math/sin beta-rad) first-arm) (* (Math/sin (- alpha-rad)) second-arm))]
     (list (* r (Math/cos theta-rad)) y (* r (Math/sin (- theta-rad))))))
 
-(def ^:dynamic *serial-conn*)
+(def ^:dynamic *serial-conn* nil)
+(def dump-degrees 0)
 
 (defn set-count [cnt]
   (let [count-str (format "s=%d," cnt)]
@@ -156,11 +159,17 @@
 
 (defn set-angle [base-angle first-angle second-angle last-angle]
   (let [serial-str (format "a=%.3f,b=%.3f,c=%.3f,d=%.3f," base-angle first-angle second-angle last-angle)]
-    ;(println (str "--> " serial-str))
+    (println (str "--> " serial-str))
     (.writeString *serial-conn* serial-str)
     (let [echo (char (aget (.readBytes *serial-conn* 1) 0))]
-      (when-not (= echo \0) (println (str echo " angle out of range - " serial-str))))))
-      ;(println (str "<-- " echo)))))
+      (when-not (= echo \0) (println (str echo " angle out of range - " serial-str)))
+      (println (str "<-- " echo)))))
+
+(defn xyz2angles-list [xyz-list]
+  (let [r-theta-list (map #(apply calc-r-theta %) (map (fn [x] (take 2 x)) xyz-list))
+        alpha-beta-radian-list (map #(calc-alpha-beta (first %1) %2) r-theta-list (map (fn [x] (last x)) xyz-list))
+        alpha-beta-degree-list (map (fn [[alpha beta]] (list (radian-to-degree alpha) (radian-to-degree beta))) alpha-beta-radian-list)]
+    (map (fn [[_ theta] [alpha beta]] (list (- theta) (- 90. beta) (+ alpha beta) alpha)) r-theta-list alpha-beta-degree-list)))
 
 (defn calc-angle-seq [input-str]
   (println input-str)
@@ -171,29 +180,36 @@
         gaps (fill-inter-stroke-gap strokes)
         dense-strokes (map fill-intra-stroke-gap strokes)
         ;; gaps has one element than dense-strokes
-        strokes-plus-gaps (concat (interleave (map (fn [x] (process-stroke x xscale yscale 7.0)) gaps)
-                                              (map (fn [x] (process-stroke x xscale yscale 5.0)) dense-strokes))
-                                  (list (process-stroke (last gaps) xscale yscale 7.0)))
+        strokes-plus-gaps (concat (interleave (map (fn [x] (process-stroke x xscale yscale 6.0)) gaps)
+                                              (map (fn [x] (process-stroke x xscale yscale 3.2)) dense-strokes))
+                                  (list (process-stroke (last gaps) xscale yscale 6.0)))
         strokes-z (reduce concat strokes-plus-gaps)
-        r-theta-list (map #(apply calc-r-theta %) (map (fn [x] (take 2 x)) strokes-z))
-        alpha-beta-radian-list (map #(calc-alpha-beta (first %1) %2) r-theta-list (map (fn [x] (last x)) strokes-z))
-        alpha-beta-degree-list (map (fn [[alpha beta]] (list (radian-to-degree alpha) (radian-to-degree beta))) alpha-beta-radian-list)]
-    (map (fn [[_ theta] [alpha beta]] (list (- theta) (- 90. beta) (+ alpha beta) alpha)) r-theta-list alpha-beta-degree-list)))
+        ]
+    (xyz2angles-list strokes-z)))
+;        r-theta-list (map #(apply calc-r-theta %) (map (fn [x] (take 2 x)) strokes-z))
+;        alpha-beta-radian-list (map #(calc-alpha-beta (first %1) %2) r-theta-list (map (fn [x] (last x)) strokes-z))
+;        alpha-beta-degree-list (map (fn [[alpha beta]] (list (radian-to-degree alpha) (radian-to-degree beta))) alpha-beta-radian-list)]
+;    (map (fn [[_ theta] [alpha beta]] (list (- theta) (- 90. beta) (+ alpha beta) alpha)) r-theta-list alpha-beta-degree-list)))
+
+(def prefix-action (list '(15.4, 27.5, 9) '(15.4, 27.5, 4.5) '(15.4, 27.5, 6.0) '(13.5, 27.5, 6.0) '(17.3, 27.5, 6.0) '(15.4, 27.5, 6.0) '(15.4, 26.5, 6.0) '(15.4, 28.5, 6.0) '(15.4, 27.5, 9)))
 
 (defn write-strokes [angles-seq]
-  (set-count (count angles-seq))
-  (doseq [angles angles-seq]
-    (apply set-angle angles))
-  (kick-action)
+  (with-open [fout (io/writer "dump_degrees.h" :append true)]
+    (.write fout (str (count angles-seq) "., "))
+    (doseq [[a b c d] angles-seq]
+      (.write fout (format "%f, %f, %f, %f, " a b c d))))
   "OK")
 
 (defroutes app
            (GET "/" [] (redirect "index.html"))
            (GET "/set-angle" [a b c d] (if (and a b c d)
-                                       (set-angle a b c d)
-                                       "/set-angle?a=<base>&b=<large>&c=<small>&d=<last>"))
-           ;(GET "/reset-angles" _ (write-strokes [[0. 90. 90. 0.]]))
+                                         (write-strokes [(map #(Float. %) (list a b c d))])
+                                         "/set-angle?a=%1&b=%2&c=%3&d=%3"))
            (GET "/reset-angles" _ (write-strokes [[0. 0. 0. 0.]]))
+           (GET "/set-xyz" [x y z] (if (and x y z)
+                                     (write-strokes (xyz2angles-list [(map #(Float. %) (list x y z))]))
+                                     "/set-xyz?x=%1&y=%2&z=%3"))
+           (GET "/write-prefix" _ (write-strokes (xyz2angles-list prefix-action)))
            (POST "/write-character" [strokes] (write-strokes (calc-angle-seq strokes)))
            (resources "/")
            (not-found "<h1>not found</h1>"))
