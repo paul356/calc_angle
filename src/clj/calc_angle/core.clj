@@ -143,7 +143,7 @@
     (list (* r (Math/cos theta-rad)) y (* r (Math/sin (- theta-rad))))))
 
 (def ^:dynamic *serial-conn* nil)
-(def dump-degrees 0)
+(def dump-degrees true)
 
 (defn set-count [cnt]
   (let [count-str (format "s=%d," cnt)]
@@ -183,21 +183,22 @@
         strokes-plus-gaps (concat (interleave (map (fn [x] (process-stroke x xscale yscale 6.0)) gaps)
                                               (map (fn [x] (process-stroke x xscale yscale 3.2)) dense-strokes))
                                   (list (process-stroke (last gaps) xscale yscale 6.0)))
-        strokes-z (reduce concat strokes-plus-gaps)
-        ]
+        strokes-z (reduce concat strokes-plus-gaps)]
     (xyz2angles-list strokes-z)))
-;        r-theta-list (map #(apply calc-r-theta %) (map (fn [x] (take 2 x)) strokes-z))
-;        alpha-beta-radian-list (map #(calc-alpha-beta (first %1) %2) r-theta-list (map (fn [x] (last x)) strokes-z))
-;        alpha-beta-degree-list (map (fn [[alpha beta]] (list (radian-to-degree alpha) (radian-to-degree beta))) alpha-beta-radian-list)]
-;    (map (fn [[_ theta] [alpha beta]] (list (- theta) (- 90. beta) (+ alpha beta) alpha)) r-theta-list alpha-beta-degree-list)))
 
 (def prefix-action (list '(15.4, 27.5, 9) '(15.4, 27.5, 4.5) '(15.4, 27.5, 6.0) '(13.5, 27.5, 6.0) '(17.3, 27.5, 6.0) '(15.4, 27.5, 6.0) '(15.4, 26.5, 6.0) '(15.4, 28.5, 6.0) '(15.4, 27.5, 9)))
 
 (defn write-strokes [angles-seq]
-  (with-open [fout (io/writer "dump_degrees.h" :append true)]
-    (.write fout (str (count angles-seq) "., "))
-    (doseq [[a b c d] angles-seq]
-      (.write fout (format "%f, %f, %f, %f, " a b c d))))
+  (if dump-degrees
+    (with-open [fout (io/writer "dump_degrees.h" :append true)]
+      (.write fout (str (count angles-seq) "., "))
+      (doseq [[a b c d] angles-seq]
+        (.write fout (format "%f, %f, %f, %f, " a b c d))))
+    (do
+      (set-count (count angles-seq))
+      (doseq [angles angles-seq]
+        (apply set-angle angles))
+      (kick-action)))
   "OK")
 
 (defroutes app
