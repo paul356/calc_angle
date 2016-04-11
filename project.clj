@@ -44,6 +44,8 @@
                    :init calc-angle.core/init 
                    :destroy calc-angle.core/destroy}
             :main ^:skip-aot calc-angle.core
-            :repl-options {:init (augmented-strokes-to-angles "dump_strokes.txt")}
+            :repl-options {:init (do 
+                                   (augmented-strokes-to-angles "huan_strokes.txt")
+                                   (augmented-strokes-to-angles "ying_strokes.txt"))}
             :profiles {:uberjar {:aot :all}})
 

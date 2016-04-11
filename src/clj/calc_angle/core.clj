@@ -20,7 +20,7 @@
 ;;
 (def min-y 18)
 (def xfield-size 24)
-(def yfield-size 8)
+(def yfield-size 12)
 
 (def base-high 25.4)
 (def first-arm 20.9)
