@@ -10,6 +10,7 @@
                            [ring/ring-core "1.4.0"]
                            [compojure "1.4.0"]
                            [org.scream3r/jssc "2.8.0"]
+                           [ring-server/ring-server "0.4.0"]
                            [cljs-ajax "0.5.3"]]
 
             :plugins [[lein-cljsbuild "1.1.1"]
@@ -43,5 +44,6 @@
                    :init calc-angle.core/init 
                    :destroy calc-angle.core/destroy}
             :main ^:skip-aot calc-angle.core
+            :repl-options {:init (augmented-strokes-to-angles "dump_strokes.txt")}
             :profiles {:uberjar {:aot :all}})
 

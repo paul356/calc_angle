@@ -19,8 +19,8 @@
 ;; Write field is x (-10, 10) y (22, 32)
 ;;
 (def min-y 18)
-(def xfield-size 20)
-(def yfield-size 10)
+(def xfield-size 24)
+(def yfield-size 12)
 
 (def base-high 25.4)
 (def first-arm 20.9)
@@ -88,18 +88,21 @@
                   (- (second pt2) (second pt1))))))
 
 (defn mix-pts [pt1 ratio1 pt2 ratio2]
-  (list (+ 
-          (* ratio1 (first pt1))
-          (* ratio2 (first pt2)))
-        (+
-          (* ratio1 (second pt1))
-          (* ratio2 (second pt2)))))
+  (map (fn [p1 p2] (+ (* ratio1 p1) (* ratio2 p2))) pt1 pt2))
+;  (list (+ 
+;          (* ratio1 (first pt1))
+;          (* ratio2 (first pt2)))
+;        (+
+;          (* ratio1 (second pt1))
+;          (* ratio2 (second pt2)))))
+
+(def intra-max-dist 15)
 
 (defn fill-intra-stroke-gap [stroke]
   (defn append-point [stroke-arr new-tail]
     (let [dist (point-dist (last stroke-arr) new-tail)]
-      (if (> dist 15)
-        (let [iter-pts (rest (concat (range 0 1 (/ 15 dist)) '(1)))
+      (if (> dist intra-max-dist)
+        (let [iter-pts (rest (concat (range 0 1 (/ intra-max-dist dist)) '(1)))
               last-pt  (last stroke-arr)] 
           (reduce (fn [arr ptv] (conj arr (mix-pts last-pt (- 1 ptv) new-tail ptv))) stroke-arr iter-pts))
         (conj stroke-arr new-tail))))
@@ -126,13 +129,12 @@
         (first left-strokes) 
         (conj reslt-strokes (fill-gap (last last-stroke) (first (first left-strokes))))))))
 
-(defn process-stroke [stroke xscale yscale default-z]
-  (map (fn [[x y]] (list (- (* xfield-size (/ x xscale)) (/ xfield-size 2.)) (+ (* yfield-size (/ (- yscale y) yscale)) min-y) default-z)) stroke))
-
-(defn dump-strokes [strokes title]
-  (println (str title " >>>"))
-  (doseq [stroke strokes]
-    (println (str "   " (doall stroke)))))
+(defmacro process-stroke [stroke xscale yscale default-z]
+  `(map (fn [[x# y# z#]] (list 
+                           (- (* xfield-size (/ x# ~xscale)) (/ xfield-size 2.)) 
+                           (+ (* yfield-size (/ (- ~yscale y#) ~yscale)) min-y) 
+                           (if (number? ~default-z) ~default-z z#)))
+        ~stroke))
 
 (defn calc-xyz [alpha beta theta]
   (let [alpha-rad (degree-to-radian alpha)
@@ -143,7 +145,7 @@
     (list (* r (Math/cos theta-rad)) y (* r (Math/sin (- theta-rad))))))
 
 (def ^:dynamic *serial-conn* nil)
-(def dump-degrees true)
+(def dump-degrees false)
 
 (defn set-count [cnt]
   (let [count-str (format "s=%d," cnt)]
@@ -171,6 +173,18 @@
         alpha-beta-degree-list (map (fn [[alpha beta]] (list (radian-to-degree alpha) (radian-to-degree beta))) alpha-beta-radian-list)]
     (map (fn [[_ theta] [alpha beta]] (list (- theta) (- 90. beta) (+ alpha beta) alpha)) r-theta-list alpha-beta-degree-list)))
 
+(defn dump-strokes [input-str]
+  (println input-str)
+  (let [input (load-string input-str)
+        strokes (:strokes input)]
+    (with-open [fout (io/writer "dump_strokes.txt" :append true)]
+      (doseq [stroke strokes]
+        (.write fout (str "{:count " (count stroke) " :xscale " (:xscale input) " :yscale " (:yscale input) " :stroke (list "))
+        (doseq [[pt idx] (map list stroke (iterate inc 0))] 
+          (.write fout (str "'(" idx " " (first pt) " " (second pt) ") ")))
+        (.write fout ") :joints (list )}\n"))))
+  "OK")
+
 (defn calc-angle-seq [input-str]
   (println input-str)
   (let [input (load-string input-str)
@@ -181,24 +195,62 @@
         dense-strokes (map fill-intra-stroke-gap strokes)
         ;; gaps has one element than dense-strokes
         strokes-plus-gaps (concat (interleave (map (fn [x] (process-stroke x xscale yscale 6.0)) gaps)
-                                              (map (fn [x] (process-stroke x xscale yscale 3.2)) dense-strokes))
+                                              (map (fn [x] (process-stroke x xscale yscale 3.9)) dense-strokes))
                                   (list (process-stroke (last gaps) xscale yscale 6.0)))
         strokes-z (reduce concat strokes-plus-gaps)]
     (xyz2angles-list strokes-z)))
 
 (def prefix-action (list '(15.4, 27.5, 9) '(15.4, 27.5, 4.5) '(15.4, 27.5, 6.0) '(13.5, 27.5, 6.0) '(17.3, 27.5, 6.0) '(15.4, 27.5, 6.0) '(15.4, 26.5, 6.0) '(15.4, 28.5, 6.0) '(15.4, 27.5, 9)))
 
+(defn dump-angles [angles-seq]
+  (with-open [fout (io/writer "dump_degrees.h" :append true)]
+    (.write fout (str (count angles-seq) "., "))
+    (doseq [[a b c d] angles-seq]
+      (.write fout (format "%f, %f, %f, %f, " a b c d)))))
+
+(defn augmented-strokes-to-angles [filename]
+  (defn calc-z [point left right]
+    (/ (+ 
+         (* (- (first right) (first point)) (second left)) 
+         (* (- (first point) (first left)) (second right))) 
+       (- (first right) (first left))))
+  (defn calc-stroke-z [stroke joints]
+    (loop [rest-joints joints
+           curr-stroke stroke
+           reslt '()]
+      (let [left (first rest-joints)
+            right (second rest-joints)
+            curr-point (first curr-stroke)]
+        (if (= (count curr-stroke) 0)
+          reslt
+          (if (and (>= (first curr-point) (first left))
+                   (<= (first curr-point) (first right)))
+            (recur rest-joints (rest curr-stroke) (concat reslt (list (concat (rest curr-point) (list (calc-z curr-point left right))))))
+            (recur (rest rest-joints) curr-stroke reslt))))))
+  (with-open [fin (io/reader filename)]
+    (doseq [line (line-seq fin)]
+      (println line)
+      (let [stroke-data (load-string line)
+            stroke (:stroke stroke-data)
+            xscale (:xscale stroke-data)
+            yscale (:yscale stroke-data)
+            joints (:joints stroke-data)
+            stroke-z (calc-stroke-z stroke joints)
+            gaps (fill-inter-stroke-gap (list stroke-z))
+            dense-strokes (map fill-intra-stroke-gap (list stroke-z))
+            strokes-plus-gaps (list 
+                                (process-stroke (first gaps) xscale yscale 6.0)
+                                (process-stroke (first dense-strokes) xscale yscale nil)
+                                (process-stroke (second gaps) xscale yscale 6.0))]
+        (println (map cons (iterate inc 0) (second strokes-plus-gaps)))
+        (dump-angles (xyz2angles-list (reduce concat strokes-plus-gaps)))))))
+
 (defn write-strokes [angles-seq]
-  (if dump-degrees
-    (with-open [fout (io/writer "dump_degrees.h" :append true)]
-      (.write fout (str (count angles-seq) "., "))
-      (doseq [[a b c d] angles-seq]
-        (.write fout (format "%f, %f, %f, %f, " a b c d))))
-    (do
-      (set-count (count angles-seq))
-      (doseq [angles angles-seq]
-        (apply set-angle angles))
-      (kick-action)))
+  (do
+    (set-count (count angles-seq))
+    (doseq [angles angles-seq]
+      (apply set-angle angles))
+    (kick-action))
   "OK")
 
 (defroutes app
@@ -211,7 +263,9 @@
                                      (write-strokes (xyz2angles-list [(map #(Float. %) (list x y z))]))
                                      "/set-xyz?x=%1&y=%2&z=%3"))
            (GET "/write-prefix" _ (write-strokes (xyz2angles-list prefix-action)))
-           (POST "/write-character" [strokes] (write-strokes (calc-angle-seq strokes)))
+           (POST "/write-character" [strokes] (if dump-degrees
+                                                (dump-strokes strokes)
+                                                (write-strokes (calc-angle-seq strokes))))
            (resources "/")
            (not-found "<h1>not found</h1>"))
 

@@ -22,19 +22,31 @@
 (defn handle-mousedown [evt]
   (swap! mouse-down (fn [_] true)))
 
-(defn handle-mousemove [context2d]
+(defn handle-mousemove [context2d text-output]
   (fn [evt]
     (when @mouse-down
-      (when (> (count @curr-stroke) 0) 
+      (when (and (> (count @curr-stroke) 0) 
+                 (not= (last @curr-stroke) [(.-offsetX evt) (.-offsetY evt)]))
         (.beginPath context2d)
         (.moveTo context2d (first (last @curr-stroke)) (second (last @curr-stroke)))
         (.lineTo context2d (.-offsetX evt) (.-offsetY evt))
         (.stroke context2d))
-      (swap! curr-stroke (fn [arr] (conj arr [(.-offsetX evt) (.-offsetY evt)]))))))
+      (when (not= (last @curr-stroke) [(.-offsetX evt) (.-offsetY evt)])
+        (swap! curr-stroke (fn [arr] (conj arr [(.-offsetX evt) (.-offsetY evt)])))))
+    (set! (.-innerText text-output) (str "(" (.-offsetX evt) "," (.-offsetY evt) ")"))))
 
 (defn format-strokes [stroke-lst]
+  (defn kick-repeat-off [stroke]
+    (loop [new-stroke '()
+           curr-stroke stroke
+           last-pt '()]
+      (if (== (count curr-stroke) 0)
+        new-stroke
+        (if (= (first curr-stroke) last-pt)
+          (recur new-stroke (rest curr-stroke) last-pt)
+          (recur (concat new-stroke (list (first curr-stroke))) (rest curr-stroke) (first curr-stroke))))))
   (defn format-stroke [arr] (str "(list " 
-                                 (string/join " " (map (fn [[x y]] (str "'(" x " " y ")")) arr))
+                                 (string/join " " (map (fn [[x y]] (str "'(" x " " y ")")) (kick-repeat-off arr)))
                                  ")"))
   (str "{" 
        :xscale " " (.-width (.getElementById js/document "canvas")) " " 
@@ -59,10 +71,11 @@
         image (.getElementById js/document "background")
         go-btn (.getElementById js/document "go-btn")
         clear-btn (.getElementById js/document "clear-btn")
-        reset-btn (.getElementById js/document "reset-btn")]
+        reset-btn (.getElementById js/document "reset-btn")
+        info-bar (.getElementById js/document "info-bar")]
     (set! (.-strokeStyle context2d) "red")
     (.drawImage context2d image 0 0)
-    (set! (.-onmousemove canvas2d) (handle-mousemove context2d))
+    (set! (.-onmousemove canvas2d) (handle-mousemove context2d info-bar))
     (set! (.-onmousedown canvas2d) handle-mousedown)
     (set! (.-onmouseup canvas2d) handle-mouseup)
     (set! (.-onclick go-btn) (fn [_] (call-set-strokes @strokes)))

@@ -20,7 +20,7 @@ const int direction_pin [NSTEPPERS] = {60, 54, 27, 36};
 const int step_pin      [NSTEPPERS] = {56, 4, 26, 35};
 
 const float hardcoded[] PROGMEM = {
-#include "dump_degrees_prefix.h"
+//#include "dump_degrees_prefix.h"
 #include "dump_degrees.h"
     1., 0., 0., 0., 0., 0};
 
@@ -89,6 +89,8 @@ int angle_to_pulse_with_check(float deg, int idx, long *pulse)
     return ret;
 }
 
+int timeout = 120;
+
 int read_angles()
 {
     float degs[NSTEPPERS];
@@ -100,12 +102,14 @@ int read_angles()
     int   address = 0;
 
     while (ch != 's' && ch != 'd' && ch != 'h') {
-        ret = serial_read_sync(&ch, 120);
+        ret = serial_read_sync(&ch, timeout);
         if (ret == 2) {
             // Timeout then write hardcoded strokes
             return 2;
         }
-    } 
+    }
+    // timeout mode is disabled
+    timeout = 0;
 
     if (ch == 'd') {
         echo_done(0);
