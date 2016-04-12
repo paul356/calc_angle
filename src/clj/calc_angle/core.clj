@@ -20,6 +20,7 @@
 ;;
 (def min-y 18)
 (def xfield-size 24)
+(def xfield-offset 0)
 (def yfield-size 12)
 
 (def base-high 25.4)
@@ -146,7 +147,7 @@
 
 (defmacro process-stroke [stroke xscale yscale default-z]
   `(map (fn [[x# y# z#]] (list 
-                           (- (* xfield-size (/ x# ~xscale)) (/ xfield-size 2.)) 
+                           (+ (- (* xfield-size (/ x# ~xscale)) (/ xfield-size 2.)) xfield-offset) 
                            (+ (* yfield-size (/ (- ~yscale y#) ~yscale)) min-y) 
                            (if (number? ~default-z) ~default-z z#)))
         ~stroke))
@@ -215,7 +216,17 @@
         strokes-z (reduce concat strokes-plus-gaps)]
     (xyz2angles-list strokes-z)))
 
-(def prefix-action (list '(15.4, 27.5, 9) '(15.4, 27.5, 4.5) '(15.4, 27.5, 6.0) '(13.5, 27.5, 6.0) '(17.3, 27.5, 6.0) '(15.4, 27.5, 6.0) '(15.4, 26.5, 6.0) '(15.4, 28.5, 6.0) '(15.4, 27.5, 9)))
+(def prefix-offsets '(2.2 2.2 1.6 1.6 1.6 1.6 1.8 1.8))
+(def centroid [-12 28])
+(def prefix-heights '(6.5 6.5 7.0 7.0 7.25 7.25 7.5 7.5))
+(def prefix-moves (list '(0 0 0) '(0 1 0) '(0 0 0) '(0 -1 0) '(0 0 0) '(1 0 0) '(0 0 0)))
+(def prefix-core-action (reduce concat (map (fn [h off] 
+                                         (map (fn [move] 
+                                                (map (fn [a b] (+ (* a off) b)) 
+                                                     move (conj centroid h))) 
+                                              prefix-moves)) 
+                                       prefix-heights prefix-offsets)))
+(def prefix-action (concat (list '(-12 28 9) '(-12 28 3.7)) prefix-core-action (list '(-12 28 9))))
 
 (defn dump-angles [angles-seq]
   (with-open [fout (io/writer "dump_degrees.h" :append true)]
