@@ -18,7 +18,7 @@
 ;; 
 ;; Write field is x (-10, 10) y (22, 32)
 ;;
-(def min-y 18)
+(def yfield-offset 18)
 (def xfield-size 24)
 (def xfield-offset 0)
 (def yfield-size 12)
@@ -26,7 +26,7 @@
 (def base-high 25.4)
 (def first-arm 20.9)
 (def second-arm 24.0)
-(def offset-last 5.5)
+(def offset-last 5.2)
 
 (defn to-int [val]
   (int (+ 0.5 val)))
@@ -148,7 +148,7 @@
 (defmacro process-stroke [stroke xscale yscale default-z]
   `(map (fn [[x# y# z#]] (list 
                            (+ (- (* xfield-size (/ x# ~xscale)) (/ xfield-size 2.)) xfield-offset) 
-                           (+ (* yfield-size (/ (- ~yscale y#) ~yscale)) min-y) 
+                           (+ (* yfield-size (/ (- ~yscale y#) ~yscale)) yfield-offset) 
                            (if (number? ~default-z) ~default-z z#)))
         ~stroke))
 
