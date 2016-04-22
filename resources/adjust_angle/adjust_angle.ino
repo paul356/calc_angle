@@ -20,7 +20,6 @@ const int direction_pin [NSTEPPERS] = {60, 54, 27, 36};
 const int step_pin      [NSTEPPERS] = {56, 4, 26, 35};
 
 const float hardcoded[] PROGMEM = {
-#include "dump_degrees_prefix.h"
 #include "dump_degrees.h"
     1., 0., 0., 0., 0., 0};
 
@@ -89,7 +88,7 @@ int angle_to_pulse_with_check(float deg, int idx, long *pulse)
     return ret;
 }
 
-int timeout = 120;
+int timeout = 90;
 
 int read_angles()
 {
@@ -257,7 +256,6 @@ void run_hardcoded()
     float degs[NSTEPPERS];
     long angles[NSTEPPERS];
 
-    int first = 1;
     while (count = (long)pgm_read_float_far(start + offset)) {
         offset += sizeof(float);
         for (long i = 0; i < count; i ++) {
@@ -269,14 +267,6 @@ void run_hardcoded()
             }
 
             change_to_angle(&angles[0]);
-            if (first) {
-                delay(500);
-            }
-        }
-
-        if (first) {
-            delay(5000);
-            first = 0;
         }
     }
 }

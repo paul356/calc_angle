@@ -18,10 +18,10 @@
 ;; 
 ;; Write field is x (-10, 10) y (22, 32)
 ;;
-(def yfield-offset 18)
-(def xfield-size 24)
+(def yfield-offset 19.5)
+(def xfield-size 18)
 (def xfield-offset 0)
-(def yfield-size 12)
+(def yfield-size 9)
 
 (def base-high 25.4)
 (def first-arm 20.9)
