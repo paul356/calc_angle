@@ -1,5 +1,6 @@
 (ns calc-angle.core
-  (:require [clojure.string :as string]
+  (:require [qbits.jet.server :refer [run-jetty]]
+            [clojure.string :as string]
             [clojure.core.reducers :as r]
             [ring.middleware.defaults :refer [wrap-defaults site-defaults]]
             [ring.middleware.params :refer [wrap-params]]
@@ -161,7 +162,7 @@
     (list (* r (Math/cos theta-rad)) y (* r (Math/sin (- theta-rad))))))
 
 (def ^:dynamic *serial-conn*)
-(def dump-degrees true)
+(def dump-degrees false)
 
 (defn set-count [cnt]
   (let [count-str (format "s=%d," cnt)]
@@ -211,22 +212,14 @@
         dense-strokes (map fill-intra-stroke-gap strokes)
         ;; gaps has one element than dense-strokes
         strokes-plus-gaps (concat (interleave (map (fn [x] (process-stroke x xscale yscale 6.0)) gaps)
-                                              (map (fn [x] (process-stroke x xscale yscale 3.7)) dense-strokes))
+                                              (map (fn [x] (process-stroke x xscale yscale 3.5)) dense-strokes))
                                   (list (process-stroke (last gaps) xscale yscale 6.0)))
         strokes-z (reduce concat strokes-plus-gaps)]
     (xyz2angles-list strokes-z)))
 
-(def prefix-offsets '(2.2 2.2 1.6 1.6 1.6 1.6 1.8 1.8))
-(def centroid [-12 28])
-(def prefix-heights '(6.5 6.5 7.0 7.0 7.25 7.25 7.5 7.5))
-(def prefix-moves (list '(0 0 0) '(0 1 0) '(0 0 0) '(0 -1 0) '(0 0 0) '(1 0 0) '(0 0 0)))
-(def prefix-core-action (reduce concat (map (fn [h off] 
-                                         (map (fn [move] 
-                                                (map (fn [a b] (+ (* a off) b)) 
-                                                     move (conj centroid h))) 
-                                              prefix-moves)) 
-                                       prefix-heights prefix-offsets)))
-(def prefix-action (concat (list '(-12 28 9) '(-12 28 3.7)) prefix-core-action (list '(-12 28 9))))
+(def calib-action (concat (list '(-10.5 32 6)) (map #(list % 32 3.5) (range -10.5 8 0.5)) (list '(7.5 32 6))))
+(def prefix-action (concat (list '(-10.5 32 6)) (map #(list % 32 3.5) (range -10.5 8 0.5)) (list '(7.5 32 6) '(10.5 32 6)) (map #(list % 32 3.5) (reverse (range -7.5 11 0.5))) (list '(-7.5 32 6))))
+
 
 (defn dump-angles [angles-seq]
   (with-open [fout (io/writer "dump_degrees.h" :append true)]
@@ -289,7 +282,10 @@
            (GET "/set-xyz" [x y z] (if (and x y z)
                                      (write-strokes (xyz2angles-list [(map #(Float. %) (list x y z))]))
                                      "/set-xyz?x=%1&y=%2&z=%3"))
-           (GET "/write-prefix" _ (write-strokes (xyz2angles-list prefix-action)))
+           (GET "/write-prefix" _ (if dump-degrees 
+                                    (dump-angles (xyz2angles-list prefix-action))
+                                    (write-strokes (xyz2angles-list prefix-action))))
+           (GET "/calib-action" _ (write-strokes (xyz2angles-list calib-action)))
            (POST "/write-character" [strokes] (if dump-degrees
                                                 (dump-strokes strokes)
                                                 (write-strokes (calc-angle-seq strokes))))
@@ -318,3 +314,20 @@
   []
   (.closePort *serial-conn*))
 
+(defn open-port [myport]
+  (alter-var-root #'*serial-conn*
+                  (fn [_]
+                    (let [ports (. SerialPortList getPortNames)]
+                      (if (and (pos? (alength ports)) (contains? (set ports) myport))
+                        (doto (SerialPort. myport)
+                          (.openPort)
+                          (.setParams 9600 8 1 0)
+                          ((fn [_] (Thread/sleep 1000))))
+                        nil))))
+  (println (str "open port " myport)))
+
+(defn -main [& args]
+  (when (> (count args) 0)
+    (open-port (first args)))
+  (let [app (wrap-params (wrap-defaults app site-defaults))] 
+    (run-jetty {:ring-handler app :port 3000})))

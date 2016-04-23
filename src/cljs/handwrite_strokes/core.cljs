@@ -54,7 +54,10 @@
        :strokes " (list " (string/join " " (map format-stroke stroke-lst)) ")}"))
 
 (defn call-set-strokes [stroke-lst]
-  (POST "/write-character" {:format :url :params {:strokes (format-strokes (list (first stroke-lst)))} :handler (fn [reponse] (when (> (count stroke-lst) 1) (call-set-strokes (rest stroke-lst))))}))
+  (when (> (count stroke-lst) 0)
+    (if (> (count (first stroke-lst)) 0)
+      (POST "/write-character" {:format :url :params {:strokes (format-strokes (list (first stroke-lst)))} :handler (fn [reponse] (when (> (count stroke-lst) 1) (call-set-strokes (rest stroke-lst))))})
+      (call-set-strokes (rest stroke-lst)))))
 
 (defn clear-strokes [context2d image]
   (fn [_]
@@ -65,6 +68,9 @@
 (defn reset-angles []
   (GET "/reset-angles"))
 
+(defn calib-action []
+  (GET "/calib-action"))
+
 (defn start []
   (let [canvas2d (.getElementById js/document "canvas")
         context2d (.getContext canvas2d "2d")
@@ -72,6 +78,7 @@
         go-btn (.getElementById js/document "go-btn")
         clear-btn (.getElementById js/document "clear-btn")
         reset-btn (.getElementById js/document "reset-btn")
+        calib-btn (.getElementById js/document "calib-btn")
         info-bar (.getElementById js/document "info-bar")]
     (set! (.-strokeStyle context2d) "red")
     (.drawImage context2d image 0 0)
@@ -80,7 +87,8 @@
     (set! (.-onmouseup canvas2d) handle-mouseup)
     (set! (.-onclick go-btn) (fn [_] (call-set-strokes @strokes)))
     (set! (.-onclick clear-btn) (clear-strokes context2d image))
-    (set! (.-onclick reset-btn) reset-angles)))
+    (set! (.-onclick reset-btn) reset-angles)
+    (set! (.-onclick calib-btn) calib-action)))
 
 (defn on-js-reload []
   ;; optionally touch your app-state to force rerendering depending on

@@ -8,6 +8,7 @@
                            [org.clojure/clojurescript "1.7.170"]
                            [ring/ring-defaults "0.1.5" :exclusions [javax.servlet/servlet-api]]
                            [ring/ring-core "1.4.0"]
+                           [cc.qbits/jet "0.7.1"]
                            [compojure "1.4.0"]
                            [org.scream3r/jssc "2.8.0"]
                            [ring-server/ring-server "0.4.0"]

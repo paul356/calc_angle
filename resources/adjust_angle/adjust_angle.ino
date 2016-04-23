@@ -20,6 +20,7 @@ const int direction_pin [NSTEPPERS] = {60, 54, 27, 36};
 const int step_pin      [NSTEPPERS] = {56, 4, 26, 35};
 
 const float hardcoded[] PROGMEM = {
+#include "dump_degrees_prefix.h"
 #include "dump_degrees.h"
     1., 0., 0., 0., 0., 0};
 
