@@ -89,7 +89,7 @@ int angle_to_pulse_with_check(float deg, int idx, long *pulse)
     return ret;
 }
 
-int timeout = 90;
+int timeout = 0;
 
 int read_angles()
 {

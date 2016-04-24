@@ -6,6 +6,7 @@
 
             :dependencies [[org.clojure/clojure "1.7.0"]
                            [org.clojure/clojurescript "1.7.170"]
+                           [org.clojure/core.async "0.2.374"]
                            [ring/ring-defaults "0.1.5" :exclusions [javax.servlet/servlet-api]]
                            [ring/ring-core "1.4.0"]
                            [cc.qbits/jet "0.7.1"]
@@ -19,8 +20,6 @@
                       [lein-ring "0.9.7"]]
 
             :source-paths ["src/clj"]
-
-            :clean-targets ^{:protect false} ["resources/public/js/" "target"]
 
             :cljsbuild {:builds
                         [{:id "dev"
@@ -39,7 +38,8 @@
                           :compiler {:output-to "resources/public/js/handwrite_strokes.js"
                                      :main handwrite_strokes.core
                                      :optimizations :advanced
-                                     :pretty-print false}}]}
+                                     :pretty-print false}
+                          :jar true}]}
 
             :ring {:handler calc-angle.core/entry 
                    :init calc-angle.core/init 

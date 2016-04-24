@@ -1,8 +1,10 @@
 (ns handwrite_strokes.core
+  (:require-macros [cljs.core.async.macros :refer [go]])
   (:require [goog.dom :as dom]
             [goog.graphics :as graphics]
             [clojure.string :as string]
-            [ajax.core :refer [GET POST]]))
+            [ajax.core :refer [GET POST]]
+            [cljs.core.async :refer [<! chan put! timeout alts!]]))
 
 (enable-console-print!)
 
@@ -13,6 +15,7 @@
 (defonce mouse-down (atom false))
 (defonce strokes (atom []))
 (defonce curr-stroke (atom []))
+(defonce run-fixed-action (atom false))
 
 (defn handle-mouseup [evt]
   (swap! strokes (fn [arr] (conj arr @curr-stroke)))
@@ -71,6 +74,22 @@
 (defn calib-action []
   (GET "/calib-action"))
 
+(defn fixed-action [fixed-btn fixed-chan]
+  (fn []
+    (swap! run-fixed-action (fn [old-v] (not old-v)))
+    (if @run-fixed-action
+      (do 
+        (set! (.-innerText fixed-btn) "固定动作 - 开") 
+        (put! fixed-chan true))
+      (set! (.-innerText fixed-btn) "固定动作 - 关"))))
+
+(defn fixed-action-loop [fixed-chan]
+  (go
+    (while true
+      (let [[_ _] (alts! [fixed-chan (timeout 120000)])]
+        (when @run-fixed-action
+          (GET "/fixed-action"))))))
+
 (defn start []
   (let [canvas2d (.getElementById js/document "canvas")
         context2d (.getContext canvas2d "2d")
@@ -79,7 +98,9 @@
         clear-btn (.getElementById js/document "clear-btn")
         reset-btn (.getElementById js/document "reset-btn")
         calib-btn (.getElementById js/document "calib-btn")
-        info-bar (.getElementById js/document "info-bar")]
+        fixed-btn (.getElementById js/document "fixed-btn")
+        info-bar (.getElementById js/document "info-bar")
+        fixed-chan (chan)]
     (set! (.-strokeStyle context2d) "red")
     (.drawImage context2d image 0 0)
     (set! (.-onmousemove canvas2d) (handle-mousemove context2d info-bar))
@@ -88,7 +109,10 @@
     (set! (.-onclick go-btn) (fn [_] (call-set-strokes @strokes)))
     (set! (.-onclick clear-btn) (clear-strokes context2d image))
     (set! (.-onclick reset-btn) reset-angles)
-    (set! (.-onclick calib-btn) calib-action)))
+    (set! (.-onclick calib-btn) calib-action)
+    (set! (.-innerText fixed-btn) "固定动作 - 关")
+    (set! (.-onclick fixed-btn) (fixed-action fixed-btn fixed-chan))
+    (fixed-action-loop fixed-chan)))
 
 (defn on-js-reload []
   ;; optionally touch your app-state to force rerendering depending on

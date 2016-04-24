@@ -2,7 +2,7 @@
   (:require [qbits.jet.server :refer [run-jetty]]
             [clojure.string :as string]
             [clojure.core.reducers :as r]
-            [ring.middleware.defaults :refer [wrap-defaults site-defaults]]
+            [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
             [ring.middleware.params :refer [wrap-params]]
             [ring.util.response :refer [redirect]]
             [compojure.core :refer [GET POST defroutes]]
@@ -170,11 +170,16 @@
     (.writeString *serial-conn* count-str)
     (println (str "<-- " (char (aget (.readBytes *serial-conn* 1) 0))))))
 
+(defn send-command [cmd]
+  (println (str "--> " cmd))
+  (.writeString *serial-conn* cmd)
+  (println (str "<-- " (char (aget (.readBytes *serial-conn* 1) 0)))))
+
 (defn kick-action []
-  (let [draw-str "d"]
-    (println (str "--> " draw-str))
-    (.writeString *serial-conn* draw-str)
-    (println (str "<-- " (char (aget (.readBytes *serial-conn* 1) 0))))))
+  (send-command "d"))
+
+(defn fixed-action []
+  (send-command "h"))
 
 (defn set-angle [base-angle first-angle second-angle last-angle]
   (let [serial-str (format "a=%.3f,b=%.3f,c=%.3f,d=%.3f," base-angle first-angle second-angle last-angle)]
@@ -273,19 +278,28 @@
     (kick-action))
   "OK")
 
+(defmacro no-cache-resp [body] 
+  `{:status 200
+    :headers {"Pragma" "no-cache"
+              "Cache-Control" "no-cache"
+              "Expires" "0"
+              "Content-Type" "text/plain"}
+    :body ~body})
+
 (defroutes app
            (GET "/" [] (redirect "index.html"))
-           (GET "/set-angle" [a b c d] (if (and a b c d)
-                                         (write-strokes [(map #(Float. %) (list a b c d))])
-                                         "/set-angle?a=%1&b=%2&c=%3&d=%3"))
-           (GET "/reset-angles" _ (write-strokes [[0. 0. 0. 0.]]))
-           (GET "/set-xyz" [x y z] (if (and x y z)
-                                     (write-strokes (xyz2angles-list [(map #(Float. %) (list x y z))]))
-                                     "/set-xyz?x=%1&y=%2&z=%3"))
-           (GET "/write-prefix" _ (if dump-degrees 
-                                    (dump-angles (xyz2angles-list prefix-action))
-                                    (write-strokes (xyz2angles-list prefix-action))))
-           (GET "/calib-action" _ (write-strokes (xyz2angles-list calib-action)))
+           (GET "/set-angle" [a b c d] (no-cache-resp (if (and a b c d)
+                                                        (write-strokes [(map #(Float. %) (list a b c d))])
+                                                        "/set-angle?a=%1&b=%2&c=%3&d=%3")))
+           (GET "/reset-angles" _ (no-cache-resp (write-strokes [[0. 0. 0. 0.]])))
+           (GET "/set-xyz" [x y z] (no-cache-resp (if (and x y z)
+                                                    (write-strokes (xyz2angles-list [(map #(Float. %) (list x y z))]))
+                                                    "/set-xyz?x=%1&y=%2&z=%3")))
+           (GET "/write-prefix" _ (no-cache-resp (if dump-degrees 
+                                                   (dump-angles (xyz2angles-list prefix-action))
+                                                   (write-strokes (xyz2angles-list prefix-action)))))
+           (GET "/calib-action" _ (no-cache-resp (write-strokes (xyz2angles-list calib-action))))
+           (GET "/fixed-action" _ (no-cache-resp (do (fixed-action) "OK")))
            (POST "/write-character" [strokes] (if dump-degrees
                                                 (dump-strokes strokes)
                                                 (write-strokes (calc-angle-seq strokes))))
@@ -329,5 +343,5 @@
 (defn -main [& args]
   (when (> (count args) 0)
     (open-port (first args)))
-  (let [app (wrap-params (wrap-defaults app site-defaults))] 
+  (let [app (wrap-params (wrap-defaults app api-defaults))] 
     (run-jetty {:ring-handler app :port 3000})))
